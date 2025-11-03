@@ -1,9 +1,51 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36623.8 d17.14
+VisualStudioVersion = 17.14.36623.8
 MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PadronWtd.Cli", "PadronWtd.Cli\PadronWtd.Cli.csproj", "{081FC68B-7242-92BB-03B6-806608A71349}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PadronWtd.UiWin", "PadronWtd.UiWin\PadronWtd.UiWin.csproj", "{16AA9923-5539-555F-63B5-36C9F2CF7EC4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PadronWtd.Tests.Unit", "PadronWtd.Tests.Unit\PadronWtd.Tests.Unit.csproj", "{00239051-2FB3-F4A6-065B-1952510AF600}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PadronWtd.Application", "PadronWtd.Application\PadronWtd.Application.csproj", "{6271EBE1-B124-A436-1FF2-E9F03385759B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PadronWtd.Domain", "PadronWtd.Domain\PadronWtd.Domain.csproj", "{BBCB479F-D937-6FB5-BDB0-17F8D26FDEEE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PadronWtd.Infrastructure", "PadronWtd.Infrastructure\PadronWtd.Infrastructure.csproj", "{6195AD67-79CF-58AC-EE2B-A90DB5D7C7A9}"
+EndProject
 Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{081FC68B-7242-92BB-03B6-806608A71349}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{081FC68B-7242-92BB-03B6-806608A71349}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{081FC68B-7242-92BB-03B6-806608A71349}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{081FC68B-7242-92BB-03B6-806608A71349}.Release|Any CPU.Build.0 = Release|Any CPU
+		{16AA9923-5539-555F-63B5-36C9F2CF7EC4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{16AA9923-5539-555F-63B5-36C9F2CF7EC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{16AA9923-5539-555F-63B5-36C9F2CF7EC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{16AA9923-5539-555F-63B5-36C9F2CF7EC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{00239051-2FB3-F4A6-065B-1952510AF600}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{00239051-2FB3-F4A6-065B-1952510AF600}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{00239051-2FB3-F4A6-065B-1952510AF600}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{00239051-2FB3-F4A6-065B-1952510AF600}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6271EBE1-B124-A436-1FF2-E9F03385759B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6271EBE1-B124-A436-1FF2-E9F03385759B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6271EBE1-B124-A436-1FF2-E9F03385759B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6271EBE1-B124-A436-1FF2-E9F03385759B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BBCB479F-D937-6FB5-BDB0-17F8D26FDEEE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBCB479F-D937-6FB5-BDB0-17F8D26FDEEE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBCB479F-D937-6FB5-BDB0-17F8D26FDEEE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBCB479F-D937-6FB5-BDB0-17F8D26FDEEE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6195AD67-79CF-58AC-EE2B-A90DB5D7C7A9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6195AD67-79CF-58AC-EE2B-A90DB5D7C7A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6195AD67-79CF-58AC-EE2B-A90DB5D7C7A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6195AD67-79CF-58AC-EE2B-A90DB5D7C7A9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
