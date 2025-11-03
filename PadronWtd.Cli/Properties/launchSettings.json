@@ -2,7 +2,7 @@
   "profiles": {
     "PadronWtd.Cli": {
       "commandName": "Project",
-      "commandLineArgs": "import padron.tsv",
+      "commandLineArgs": "import ..\\etc\\padron.csv",
       "workingDirectory": "$(ProjectDir)"
     }
   }
