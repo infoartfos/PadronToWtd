@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "PadronWtd.Cli": {
+      "commandName": "Project",
+      "commandLineArgs": "import padron.tsv",
+      "workingDirectory": "$(ProjectDir)"
+    }
+  }
+}
