@@ -47,7 +47,7 @@ namespace PadronWtd.UI
                 // Create s sub menu
                 oCreationPackage.Type = SAPbouiCOM.BoMenuType.mt_STRING;
                 oCreationPackage.UniqueID = "Lectora_de_Cheques.Form1";
-                oCreationPackage.String = "Form1";
+                oCreationPackage.String = "Padron Salta";
                 oMenus.AddEx(oCreationPackage);
             }
             catch (Exception er)
