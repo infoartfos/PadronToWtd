@@ -1,6 +1,6 @@
 using PadronWtd.Application.Interfaces;
 
-namespace PadronWtd.Infrastructure.Repositories;
+namespace PadronWtd.Infrastructure.Repositories.InMemory;
 
 public class DummySnRepository : ISnRepository
 {

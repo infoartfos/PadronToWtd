@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using PadronWtd.Application.Interfaces;
 using PadronWtd.Application.Services;
-using PadronWtd.Infrastructure.Repositories;
+using PadronWtd.Infrastructure.Repositories.InMemory;
 using PadronWtd.Infrastructure.Services;
 using PadronWtd.Infrastructure.Utils;
 
@@ -34,12 +34,18 @@ switch (command)
 {
     case "import":
         var file = args.ElementAtOrDefault(1);
-        if (string.IsNullOrEmpty(file)) { Console.WriteLine("Falta archivo."); return; }
-        await provider.GetRequiredService<ImportPadronUseCase>().ExecuteAsync(file, 1, "demo");
+        if (string.IsNullOrEmpty(file)) 
+        { 
+            Console.WriteLine("Falta archivo."); 
+            return; 
+        }
+        var import_service = provider.GetRequiredService<ImportPadronUseCase>();
+        await import_service.ExecuteAsync(file, 1, "demo");
         break;
     case "process":
         var runId = int.TryParse(args.ElementAtOrDefault(1), out var id) ? id : 1;
-        await provider.GetRequiredService<ProcessRunUseCase>().ExecuteAsync(runId, "demo");
+        var process_service  = provider.GetRequiredService<ProcessRunUseCase>();
+        await process_service.ExecuteAsync(runId, "demo");
         break;
     default:
         Console.WriteLine("Comando no reconocido.");

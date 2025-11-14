@@ -1,7 +1,7 @@
 using PadronWtd.Application.Interfaces;
 using PadronWtd.Domain.Entities;
 
-namespace PadronWtd.Infrastructure.Repositories;
+namespace PadronWtd.Infrastructure.Repositories.InMemory;
 
 public class InMemoryTaxRepository : ITaxRepository
 {
