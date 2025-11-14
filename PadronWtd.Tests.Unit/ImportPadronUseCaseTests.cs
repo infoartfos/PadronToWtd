@@ -16,13 +16,13 @@ public class ImportPadronUseCaseTests
         // Arrange
         var repo = new InMemoryPadronRepository();
         var importer = new CsvImporter(repo);
-        var useCase = new ImportPadronUseCase(importer);
+        var useCaseImportarArchivo = new ImportPadronUseCase(importer);
 
         var tempFile = Path.GetTempFileName();
         await File.WriteAllTextAsync(tempFile, "20000156982\tProveedor A\tACT1\tALTA");
 
         // Act
-        await useCase.ExecuteAsync(tempFile, runId: 1, user: "test");
+        await useCaseImportarArchivo.ExecuteAsync(tempFile, runId: 1, user: "test");
 
         // Assert
         var data = await repo.GetByRunAsync(1);
