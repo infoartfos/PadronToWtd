@@ -1,10 +1,15 @@
-﻿using SAPbobsCOM;
+﻿using PadronSaltaAddOn.UI.DI;
+using PadronSaltaAddOn.UI.Logging;
+using PadronSaltaAddOn.UI.Services;
+using SAPbobsCOM;
 using SAPbouiCOM;
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Collections.Concurrent;
 
 namespace PadronSaltaAddOn.UI.Forms
 {
@@ -20,10 +25,18 @@ namespace PadronSaltaAddOn.UI.Forms
         private SAPbouiCOM.Button btnBrowse;
         private SAPbouiCOM.Button btnImport;
         private StaticText lblResumen;
+        private StaticText lblProgress; // etiqueta para progreso
+        private readonly IImportService _importService;
+        private readonly ILogger _logger;
+        private CancellationTokenSource _cts;
 
         public FrmImportar(SAPbouiCOM.Application application)
         {
             SBO_Application = application;
+
+            // obtener servicios desde provider simples (asegúrate de registrar antes)
+            _logger = SimpleServiceProvider.Get<ILogger>();
+            _importService = SimpleServiceProvider.Get<IImportService>();
         }
 
         public void CreateForm()
@@ -31,14 +44,14 @@ namespace PadronSaltaAddOn.UI.Forms
             FormCreationParams creationPackage =
                 (FormCreationParams)SBO_Application.CreateObject(BoCreatableObjectType.cot_FormCreationParams);
 
-            creationPackage.UniqueID = "FrmImportar";
-            creationPackage.FormType = "FrmImportar";
+            creationPackage.UniqueID = "FrmImp";
+            creationPackage.FormType = "FrmImp";
             creationPackage.BorderStyle = BoFormBorderStyle.fbs_Sizable;
 
             oForm = SBO_Application.Forms.AddEx(creationPackage);
             oForm.Title = "Importar y Procesar";
             oForm.Width = 520;
-            oForm.Height = 350;
+            oForm.Height = 380;
 
             int left = 20, top = 30, lblWidth = 150, fieldWidth = 250, spacing = 30;
 
@@ -72,39 +85,35 @@ namespace PadronSaltaAddOn.UI.Forms
             lblResumen = AddLabel("lblResumen", "", left, top);
             lblResumen.Item.Width = 450;
 
+            // Progress label
+            top += spacing + 10;
+            lblProgress = AddLabel("lblProgr", "Progreso: 0%", left, top);
+            lblProgress.Item.Width = 450;
+
             // Eventos
             SBO_Application.ItemEvent += SBO_Application_ItemEvent;
 
             oForm.Visible = true;
         }
 
-        public string GetFormUid()
-        {
-            return oForm.UniqueID;
-        }
-
-        // --------------------------------------------
-        // EVENTOS
-        // --------------------------------------------
-
         private void SBO_Application_ItemEvent(string FormUID, ref ItemEvent pVal, out bool BubbleEvent)
         {
             BubbleEvent = true;
 
-            // Procesar la cola APENAS SAP refresca el form
-            if (FormUID == "FrmImportar" && pVal.EventType == BoEventTypes.et_FORM_ACTIVATE)
+            // Procesar cola justo al activar el form
+            if (FormUID == "FrmImp" && pVal.EventType == BoEventTypes.et_FORM_ACTIVATE)
             {
                 ProcesarColaDeArchivos();
             }
 
-            // Otros eventos propios del form
-            if (FormUID != "FrmImportar" || !pVal.BeforeAction)
+            if (FormUID != "FrmImp" || !pVal.BeforeAction)
                 return;
 
             if (pVal.EventType == BoEventTypes.et_ITEM_PRESSED && pVal.ItemUID == "btnImport")
             {
                 BubbleEvent = false;
-                ProcesarArchivo();
+                // iniciar proceso asincrónico
+                _ = Task.Run(() => StartImportAsync());
             }
 
             if (pVal.EventType == BoEventTypes.et_ITEM_PRESSED && pVal.ItemUID == "btnBrowse")
@@ -114,110 +123,32 @@ namespace PadronSaltaAddOn.UI.Forms
             }
         }
 
-        // --------------------------------------------
-        // PROCESAR COLA
-        // --------------------------------------------
         private void ProcesarColaDeArchivos()
         {
             if (_filePathQueue.TryDequeue(out string filePath))
             {
                 try
                 {
-                    Console.WriteLine("[DEBUG] Procesando archivo desde cola: " + filePath);
-
+                    _logger.Info("Procesando archivo desde cola: " + filePath);
                     oForm.Freeze(true);
                     EditText field = (EditText)oForm.Items.Item("txtArchivo").Specific;
                     field.Value = filePath;
                 }
                 catch (Exception ex)
                 {
-                    SBO_Application.StatusBar.SetText(
-                        $"Error al actualizar archivo: {ex.Message}",
-                        BoMessageTime.bmt_Short,
-                        BoStatusBarMessageType.smt_Error
-                    );
+                    _logger.Error("Error al actualizar campo txtArchivo", ex);
+                    SBO_Application.StatusBar.SetText("Error al actualizar ruta del archivo.", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Error);
                 }
                 finally
                 {
                     oForm.Freeze(false);
                 }
             }
+
         }
-
-        // --------------------------------------------
-        // BOTÓN EXAMINAR
-        // --------------------------------------------
-        private void SeleccionarArchivo()
-        {
-            var t = new Thread(() =>
-            {
-                try
-                {
-                    using (var dialog = new OpenFileDialog())
-                    {
-                        dialog.Filter = "Archivos CSV|*.csv|Todos los archivos|*.*";
-                        dialog.Title = "Seleccionar archivo de padrón";
-                        dialog.RestoreDirectory = true;
-
-                        if (dialog.ShowDialog() == DialogResult.OK)
-                        {
-                            Console.WriteLine("[DEBUG] Archivo seleccionado: " + dialog.FileName);
-                            _filePathQueue.Enqueue(dialog.FileName);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("[DEBUG] Error en hilo de diálogo: " + ex.Message);
-                }
-            });
-
-            t.SetApartmentState(ApartmentState.STA);
-            t.Start();
-        }
-
-        // --------------------------------------------
-        // PROCESAR ARCHIVO
-        // --------------------------------------------
-        private void ProcesarArchivo()
-        {
-            string path = txtArchivo.Value.Trim();
-
-            if (string.IsNullOrEmpty(path) || !File.Exists(path))
-            {
-                SBO_Application.MessageBox("Debe seleccionar un archivo válido.");
-                return;
-            }
-
-            string periodo = cmbPeriodo.Selected.Description;
-            int confirm = SBO_Application.MessageBox(
-                $"¿Confirmar importación del archivo para el período:\n{periodo}?",
-                2, "Sí", "No", "");
-
-            if (confirm != 1)
-                return;
-
-            // Simulación del proceso
-            int totalRegistros = 17898;
-            int actualizados = 109;
-            int noEnPadron = 2;
-
-            lblResumen.Caption =
-                $"Registros del Padrón: {totalRegistros}\n" +
-                $"Registros Actualizados: {actualizados}\n" +
-                $"Registros NO en Padrón: {noEnPadron}\n\n" +
-                $"FINALIZADO";
-
-            SBO_Application.StatusBar.SetText(
-                "Importación finalizada correctamente.",
-                BoMessageTime.bmt_Medium,
-                BoStatusBarMessageType.smt_Success
-            );
-        }
-
-        // --------------------------------------------
-        // HELPERS UI
-        // --------------------------------------------
+            // --------------------------------------------
+            // HELPERS UI
+            // --------------------------------------------
         private StaticText AddLabel(string uid, string caption, int left, int top)
         {
             Item item = oForm.Items.Add(uid, BoFormItemTypes.it_STATIC);
@@ -257,5 +188,161 @@ namespace PadronSaltaAddOn.UI.Forms
             btn.Caption = caption;
             return btn;
         }
+
+        private void SeleccionarArchivo()
+        {
+            var t = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    using (var dialog = new OpenFileDialog())
+                    {
+                        dialog.Filter = "Archivos CSV|*.csv|Todos los archivos|*.*";
+                        dialog.Title = "Seleccionar archivo de padrón";
+                        dialog.RestoreDirectory = true;
+
+                        if (dialog.ShowDialog() == DialogResult.OK)
+                        {
+                            _filePathQueue.Enqueue(dialog.FileName);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error("Error en hilo de diálogo", ex);
+                }
+            });
+
+            t.SetApartmentState(ApartmentState.STA);
+            t.Start();
+        }
+
+        // Inicia la importación (orquesta, async)
+        private async Task StartImportAsync()
+        {
+            try
+            {
+                // Leer path actual del campo (en el hilo del add-on, acceder con caution)
+                string path;
+                try
+                {
+                    oForm.Freeze(true);
+                    path = ((EditText)oForm.Items.Item("txtArchivo").Specific).Value?.Trim() ?? "";
+                }
+                finally
+                {
+                    try { oForm.Freeze(false); } catch { }
+                }
+
+                if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                {
+                    SBO_Application.MessageBox("Debe seleccionar un archivo válido.");
+                    return;
+                }
+
+                // Preparar cancellation token
+                _cts = new CancellationTokenSource();
+
+                // Deshabilitar botón mientras procesa
+                SetButtonEnabled("btnImport", false);
+                SetButtonEnabled("btnBrowse", false);
+
+                var progress = new Progress<int>(pct =>
+                {
+                    UpdateProgressLabel(pct);
+                    SBO_Application.StatusBar.SetText($"Importando... {pct}%", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
+                });
+
+                // Llamada al servicio con un onBatch simple que guarda (simulado)
+                await _importService.ImportFileAsync(
+                    path,
+                    progress,
+                    _cts.Token,
+                    async (batch) =>
+                    {
+                        // Aquí podés mapear batch->entidades y llamar repositorios.
+                        // Demo: simulamos demora por lote y logueamos
+                        _logger.Info($"Persistiendo lote de {batch?.AsListOrCount() ?? 0} lineas...");
+                        await Task.Delay(50); // simulación
+                    });
+
+                // Al finalizar
+                UpdateSummary("Importación finalizada correctamente.");
+                SBO_Application.StatusBar.SetText("Importación finalizada correctamente.", BoMessageTime.bmt_Medium, BoStatusBarMessageType.smt_Success);
+            }
+            catch (OperationCanceledException)
+            {
+                UpdateSummary("Importación cancelada.");
+                SBO_Application.StatusBar.SetText("Importación cancelada.", BoMessageTime.bmt_Medium, BoStatusBarMessageType.smt_Warning);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error en StartImportAsync", ex);
+                UpdateSummary("Error durante la importación: " + ex.Message);
+                SBO_Application.StatusBar.SetText("Error durante la importación.", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Error);
+            }
+            finally
+            {
+                SetButtonEnabled("btnImport", true);
+                SetButtonEnabled("btnBrowse", true);
+                _cts?.Dispose();
+                _cts = null;
+            }
+        }
+
+        private void UpdateProgressLabel(int pct)
+        {
+            try
+            {
+                oForm.Freeze(true);
+                ((StaticText)oForm.Items.Item("lblProgr").Specific).Caption = $"Progreso: {pct}%";
+            }
+            catch { }
+            finally
+            {
+                try { oForm.Freeze(false); } catch { }
+            }
+        }
+
+        private void UpdateSummary(string text)
+        {
+            try
+            {
+                oForm.Freeze(true);
+                ((StaticText)oForm.Items.Item("lblResumen").Specific).Caption = text;
+            }
+            catch { }
+            finally
+            {
+                try { oForm.Freeze(false); } catch { }
+            }
+        }
+
+        private void SetButtonEnabled(string btnId, bool enabled)
+        {
+            try
+            {
+                oForm.Freeze(true);
+                var btn = (SAPbouiCOM.Button)oForm.Items.Item(btnId).Specific;
+                btn.Item.Enabled = enabled;
+            }
+            catch { }
+            finally
+            {
+                try { oForm.Freeze(false); } catch { }
+            }
+        }
+    }
+
+    // Helper extension local
+    internal static class EnumerableHelpers
+    {
+        public static int AsListOrCount<T>(this IEnumerable<T> e)
+        {
+            if (e == null) return 0;
+            if (e is System.Collections.ICollection c) return c.Count;
+            return e is System.Collections.Generic.ICollection<T> col ? col.Count : new List<T>(e).Count;
+        }
     }
 }
+
