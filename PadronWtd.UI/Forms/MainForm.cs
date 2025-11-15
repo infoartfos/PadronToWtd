@@ -1,4 +1,8 @@
-﻿using SAPbouiCOM;
+﻿using PadronWtd.UI.Configuration;
+using PadronWtd.UI.Constants;
+using SAPbouiCOM;
+using System;
+
 // using PadronSaltaAddOn.Application.Services;
 
 namespace PadronSaltaAddOn.UI.Forms
@@ -14,6 +18,13 @@ namespace PadronSaltaAddOn.UI.Forms
         {
             _app = app;
             //       _impuestoService = impuestoService;
+            string text = AppConstants.MainFormTitle;
+
+            string apiUrl = AppSettings.ApiUrl;
+
+            Console.WriteLine("Title  : " + text);
+            Console.WriteLine("API URL: " + apiUrl);
+
             CreateForm();
         }
 
