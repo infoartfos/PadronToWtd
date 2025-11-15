@@ -2,6 +2,7 @@
 using PadronWtd.UI.Constants;
 using SAPbouiCOM;
 using System;
+// using PadronSaltaAddOn.Application.Services;
 
 // using PadronSaltaAddOn.Application.Services;
 
@@ -83,8 +84,8 @@ namespace PadronSaltaAddOn.UI.Forms
         private void OnImportarClick()
         {
             //var frmImportar = new FrmImportar(SBO_Application, oCompany);
-            //var frmImportar = new FrmImportar(_app);
-            //frmImportar.CreateForm();
+            var frmImportar = new FrmImportar(_app);
+            frmImportar.CreateForm();
         }
     }
 }
