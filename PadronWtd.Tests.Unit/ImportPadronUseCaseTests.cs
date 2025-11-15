@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using PadronWtd.Application.Services;
 using PadronWtd.Infrastructure.Repositories;
+using PadronWtd.Infrastructure.Repositories.InMemory;
 using PadronWtd.Infrastructure.Utils;
 using Xunit;
 
