@@ -2,28 +2,28 @@
 using SAPbouiCOM;
 using System;
 using System.IO;
-// using System.Windows.Forms;
+using System.Threading;
+using System.Windows.Forms;
+using System.Collections.Concurrent;
 
 namespace PadronSaltaAddOn.UI.Forms
 {
     public class FrmImportar
     {
-        private readonly Application SBO_Application;
-        // private readonly Company oCompany;
-        private Form oForm;
+        private readonly SAPbouiCOM.Application SBO_Application;
+        private SAPbouiCOM.Form oForm;
+        private readonly ConcurrentQueue<string> _filePathQueue = new ConcurrentQueue<string>();
 
         private EditText txtId;
-        private ComboBox cmbPeriodo;
+        private SAPbouiCOM.ComboBox cmbPeriodo;
         private EditText txtArchivo;
-        private Button btnBrowse;
-        private Button btnImportar;
+        private SAPbouiCOM.Button btnBrowse;
+        private SAPbouiCOM.Button btnImport;
         private StaticText lblResumen;
 
-        // public FrmImportar(Application application, Company company)
-        public FrmImportar(Application application)
+        public FrmImportar(SAPbouiCOM.Application application)
         {
             SBO_Application = application;
-            //oCompany = company;
         }
 
         public void CreateForm()
@@ -65,28 +65,43 @@ namespace PadronSaltaAddOn.UI.Forms
 
             // Botón Importar
             top += spacing * 2;
-            btnImportar = AddButton("btnImportar", "Importar y Procesar", left + lblWidth, top, 200);
-
+            btnImport = AddButton("btnImport", "Importar y Procesar", left + lblWidth, top, 200);
 
             // Resumen
             top += spacing * 2;
             lblResumen = AddLabel("lblResumen", "", left, top);
             lblResumen.Item.Width = 450;
 
-            // Evento
+            // Eventos
             SBO_Application.ItemEvent += SBO_Application_ItemEvent;
 
             oForm.Visible = true;
         }
 
+        public string GetFormUid()
+        {
+            return oForm.UniqueID;
+        }
+
+        // --------------------------------------------
+        // EVENTOS
+        // --------------------------------------------
+
         private void SBO_Application_ItemEvent(string FormUID, ref ItemEvent pVal, out bool BubbleEvent)
         {
             BubbleEvent = true;
 
+            // Procesar la cola APENAS SAP refresca el form
+            if (FormUID == "FrmImportar" && pVal.EventType == BoEventTypes.et_FORM_ACTIVATE)
+            {
+                ProcesarColaDeArchivos();
+            }
+
+            // Otros eventos propios del form
             if (FormUID != "FrmImportar" || !pVal.BeforeAction)
                 return;
 
-            if (pVal.EventType == BoEventTypes.et_ITEM_PRESSED && pVal.ItemUID == "btnImportar")
+            if (pVal.EventType == BoEventTypes.et_ITEM_PRESSED && pVal.ItemUID == "btnImport")
             {
                 BubbleEvent = false;
                 ProcesarArchivo();
@@ -99,31 +114,75 @@ namespace PadronSaltaAddOn.UI.Forms
             }
         }
 
-        private void SeleccionarArchivo()
+        // --------------------------------------------
+        // PROCESAR COLA
+        // --------------------------------------------
+        private void ProcesarColaDeArchivos()
         {
-            try
+            if (_filePathQueue.TryDequeue(out string filePath))
             {
-                // SAP no tiene un diálogo nativo, se puede usar FileDialog de .NET:
-                using (var dialog = new System.Windows.Forms.OpenFileDialog())
+                try
                 {
-                    dialog.Filter = "Archivos CSV|*.csv|Todos los archivos|*.*";
-                    dialog.Title = "Seleccionar archivo de padrón";
+                    Console.WriteLine("[DEBUG] Procesando archivo desde cola: " + filePath);
 
-                    if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-                    {
-                        txtArchivo.Value = dialog.FileName;
-                    }
+                    oForm.Freeze(true);
+                    EditText field = (EditText)oForm.Items.Item("txtArchivo").Specific;
+                    field.Value = filePath;
                 }
-            }
-            catch (Exception ex)
-            {
-                SBO_Application.StatusBar.SetText($"Error al seleccionar archivo: {ex.Message}", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Error);
+                catch (Exception ex)
+                {
+                    SBO_Application.StatusBar.SetText(
+                        $"Error al actualizar archivo: {ex.Message}",
+                        BoMessageTime.bmt_Short,
+                        BoStatusBarMessageType.smt_Error
+                    );
+                }
+                finally
+                {
+                    oForm.Freeze(false);
+                }
             }
         }
 
+        // --------------------------------------------
+        // BOTÓN EXAMINAR
+        // --------------------------------------------
+        private void SeleccionarArchivo()
+        {
+            var t = new Thread(() =>
+            {
+                try
+                {
+                    using (var dialog = new OpenFileDialog())
+                    {
+                        dialog.Filter = "Archivos CSV|*.csv|Todos los archivos|*.*";
+                        dialog.Title = "Seleccionar archivo de padrón";
+                        dialog.RestoreDirectory = true;
+
+                        if (dialog.ShowDialog() == DialogResult.OK)
+                        {
+                            Console.WriteLine("[DEBUG] Archivo seleccionado: " + dialog.FileName);
+                            _filePathQueue.Enqueue(dialog.FileName);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("[DEBUG] Error en hilo de diálogo: " + ex.Message);
+                }
+            });
+
+            t.SetApartmentState(ApartmentState.STA);
+            t.Start();
+        }
+
+        // --------------------------------------------
+        // PROCESAR ARCHIVO
+        // --------------------------------------------
         private void ProcesarArchivo()
         {
             string path = txtArchivo.Value.Trim();
+
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
             {
                 SBO_Application.MessageBox("Debe seleccionar un archivo válido.");
@@ -131,7 +190,10 @@ namespace PadronSaltaAddOn.UI.Forms
             }
 
             string periodo = cmbPeriodo.Selected.Description;
-            int confirm = SBO_Application.MessageBox($"¿Confirmar importación del archivo para el período:\n{periodo}?", 2, "Sí", "No", "");
+            int confirm = SBO_Application.MessageBox(
+                $"¿Confirmar importación del archivo para el período:\n{periodo}?",
+                2, "Sí", "No", "");
+
             if (confirm != 1)
                 return;
 
@@ -140,18 +202,22 @@ namespace PadronSaltaAddOn.UI.Forms
             int actualizados = 109;
             int noEnPadron = 2;
 
-            // Acá podrías llamar a un servicio de dominio real (por ejemplo: PadronService.ImportarArchivo())
-
             lblResumen.Caption =
                 $"Registros del Padrón: {totalRegistros}\n" +
                 $"Registros Actualizados: {actualizados}\n" +
                 $"Registros NO en Padrón: {noEnPadron}\n\n" +
                 $"FINALIZADO";
 
-            SBO_Application.StatusBar.SetText("Importación finalizada correctamente.", BoMessageTime.bmt_Medium, BoStatusBarMessageType.smt_Success);
+            SBO_Application.StatusBar.SetText(
+                "Importación finalizada correctamente.",
+                BoMessageTime.bmt_Medium,
+                BoStatusBarMessageType.smt_Success
+            );
         }
 
-        // Helpers UI
+        // --------------------------------------------
+        // HELPERS UI
+        // --------------------------------------------
         private StaticText AddLabel(string uid, string caption, int left, int top)
         {
             Item item = oForm.Items.Add(uid, BoFormItemTypes.it_STATIC);
@@ -172,22 +238,22 @@ namespace PadronSaltaAddOn.UI.Forms
             return (EditText)item.Specific;
         }
 
-        private ComboBox AddComboBox(string uid, int left, int top, int width)
+        private SAPbouiCOM.ComboBox AddComboBox(string uid, int left, int top, int width)
         {
             Item item = oForm.Items.Add(uid, BoFormItemTypes.it_COMBO_BOX);
             item.Left = left;
             item.Top = top;
             item.Width = width;
-            return (ComboBox)item.Specific;
+            return (SAPbouiCOM.ComboBox)item.Specific;
         }
 
-        private Button AddButton(string uid, string caption, int left, int top, int width)
+        private SAPbouiCOM.Button AddButton(string uid, string caption, int left, int top, int width)
         {
             Item item = oForm.Items.Add(uid, BoFormItemTypes.it_BUTTON);
             item.Left = left;
             item.Top = top;
             item.Width = width;
-            Button btn = (Button)item.Specific;
+            SAPbouiCOM.Button btn = (SAPbouiCOM.Button)item.Specific;
             btn.Caption = caption;
             return btn;
         }

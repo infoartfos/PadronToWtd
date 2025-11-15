@@ -71,7 +71,7 @@ namespace PadronSaltaAddOn.UI.Forms
                         _app.MessageBox("Tasa actualizada correctamente");
                         break;
                     case "btnProc":
-                        _app.MessageBox($"implementada: {pVal.ItemUID}");
+                        //_app.MessageBox($"implementada: {pVal.ItemUID}");
                         OnImportarClick();
                         break;
                     default:
@@ -83,7 +83,6 @@ namespace PadronSaltaAddOn.UI.Forms
 
         private void OnImportarClick()
         {
-            //var frmImportar = new FrmImportar(SBO_Application, oCompany);
             var frmImportar = new FrmImportar(_app);
             frmImportar.CreateForm();
         }
