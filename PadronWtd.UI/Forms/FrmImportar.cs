@@ -1,6 +1,6 @@
-﻿using PadronSaltaAddOn.UI.DI;
-using PadronSaltaAddOn.UI.Logging;
-using PadronSaltaAddOn.UI.Services;
+﻿using PadronWtd.UI.DI;
+using PadronWtd.UI.Logging;
+using PadronWtd.UI.Services;
 using SAPbobsCOM;
 using SAPbouiCOM;
 using System;
@@ -11,7 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace PadronSaltaAddOn.UI.Forms
+namespace PadronWtd.UI.Forms
 {
     public class FrmImportar
     {

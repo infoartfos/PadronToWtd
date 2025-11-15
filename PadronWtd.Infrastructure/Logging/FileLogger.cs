@@ -1,8 +1,9 @@
-﻿using System;
+﻿using PadronWtd.Infrastucture.Logging;
+using System;
 using System.IO;
 using System.Text;
 
-namespace PadronSaltaAddOn.UI.Logging
+namespace PadronWtd.Infrastructure.Logging
 {
     internal class FileLogger : ILogger
     {

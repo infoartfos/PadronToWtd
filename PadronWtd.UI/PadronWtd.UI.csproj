@@ -70,8 +70,6 @@
     <Compile Include="DI\SimpleServiceProvider.cs" />
     <Compile Include="Forms\FrmImportar.cs" />
     <Compile Include="Forms\MainForm.cs" />
-    <Compile Include="Logging\FileLogger.cs" />
-    <Compile Include="Logging\ILogger.cs" />
     <Compile Include="Menu.cs" />
     <Compile Include="MenuConstants.cs" />
     <Compile Include="Program.cs" />
@@ -112,6 +110,5 @@
       <Install>false</Install>
     </BootstrapperPackage>
   </ItemGroup>
-  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

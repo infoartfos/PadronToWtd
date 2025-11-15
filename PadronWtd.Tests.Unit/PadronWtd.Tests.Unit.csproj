@@ -23,7 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PadronWtd.Application\PadronWtd.Application.csproj" />
-    <ProjectReference Include="..\PadronWtd.Infrastructure\PadronWtd.Infrastructure.csproj" />
+    <ProjectReference Include="..\PadronWtd.Infrastructure\PadronWtd.Infrastructure_OLD.csproj" />
   </ItemGroup>
 
   <ItemGroup>

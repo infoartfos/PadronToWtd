@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using PadronSaltaAddOn.UI.Logging;
-using PadronSaltaAddOn.UI.Services;
+using PadronWtd.Infrastructure.Services;
 
-namespace PadronSaltaAddOn.UI.DI
+using PadronWtd.UI.Services;
+
+
+namespace PadronWtd.UI.DI
 {
     public static class SimpleServiceProvider
     {

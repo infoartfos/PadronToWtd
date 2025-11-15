@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using PadronSaltaAddOn.UI.Logging;
+using PadronWtd.UI.Logging;
 
-namespace PadronSaltaAddOn.UI.Services
+namespace PadronWtd.UI.Services
 {
     internal class FrmImportarService : IImportService
     {

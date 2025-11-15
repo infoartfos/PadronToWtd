@@ -1,5 +1,5 @@
-﻿using PadronSaltaAddOn.UI.DI;
-using PadronSaltaAddOn.UI.Logging;
+﻿using PadronWtd.UI.DI;
+using PadronWtd.UI.Logging;
 using SAPbouiCOM.Framework;
 using System;
 using System.Collections.Generic;

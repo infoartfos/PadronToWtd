@@ -6,7 +6,7 @@ using System;
 
 // using PadronSaltaAddOn.Application.Services;
 
-namespace PadronSaltaAddOn.UI.Forms
+namespace PadronWtd.UI.Forms
 {
     internal class MainForm
     {
