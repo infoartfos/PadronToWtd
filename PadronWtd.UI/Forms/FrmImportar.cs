@@ -1,6 +1,7 @@
 ﻿using PadronSaltaAddOn.UI.DI;
 using PadronSaltaAddOn.UI.Logging;
 using PadronSaltaAddOn.UI.Services;
+using PadronWtd.UI.Services;
 using SAPbobsCOM;
 using SAPbouiCOM;
 using System;
@@ -260,10 +261,11 @@ namespace PadronSaltaAddOn.UI.Forms
                     _cts.Token,
                     async (batch) =>
                     {
-                        // Aquí podés mapear batch->entidades y llamar repositorios.
-                        // Demo: simulamos demora por lote y logueamos
+
+                        this.importar_rows(path);
+
                         _logger.Info($"Persistiendo lote de {batch?.AsListOrCount() ?? 0} lineas...");
-                        await Task.Delay(50); // simulación
+                        
                     });
 
                 // Al finalizar
@@ -290,7 +292,44 @@ namespace PadronSaltaAddOn.UI.Forms
             }
         }
 
-        private void UpdateProgressLabel(int pct)
+
+    private void importar_rows(string filePath)
+    {
+
+        var csv = new CsvImportService();
+        var rows = csv.ReadCsv(filePath);
+
+        var company = SapConnectionFactory.CreateCompany();
+        var repo = new SapPadronService(company);
+
+        int ok = 0, error = 0;
+
+        foreach (var row in rows)
+        {
+            string err;
+            int result = repo.Insert(row, out err);
+
+            if (result == 1)
+                ok++;
+            else
+            {
+                error++;
+                //Application.SBO_Application.SetStatusBarMessage(
+                //    $"Error insertando {row.Cuit}: {err}",
+                //    SAPbouiCOM.BoMessageTime.bmt_Short,
+                //    true
+                //);
+            }
+        }
+
+        MessageBox.Show($"Importación completa.\nCorrectos: {ok}\nErrores: {error}");
+    }
+
+
+
+
+
+    private void UpdateProgressLabel(int pct)
         {
             try
             {

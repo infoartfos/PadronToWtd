@@ -74,10 +74,14 @@
     <Compile Include="Logging\ILogger.cs" />
     <Compile Include="Menu.cs" />
     <Compile Include="MenuConstants.cs" />
+    <Compile Include="Models\P_SaltaCsvRow.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Services\CsvImportService.cs" />
     <Compile Include="Services\FrmImportarService.cs" />
     <Compile Include="Services\IImportService.cs" />
+    <Compile Include="Services\SapConnectionFactory.cs" />
+    <Compile Include="Services\SapPadronService.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
