@@ -2,7 +2,6 @@
 using PadronSaltaAddOn.UI.Logging;
 using PadronSaltaAddOn.UI.Services;
 using PadronSaltaAddOn.UI.SL;
-using SAPbobsCOM;
 using SAPbouiCOM;
 using System;
 using System.Collections.Concurrent;
@@ -10,7 +9,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace PadronSaltaAddOn.UI.Forms
 {
@@ -26,16 +24,20 @@ namespace PadronSaltaAddOn.UI.Forms
         private SAPbouiCOM.Button btnBrowse;
         private SAPbouiCOM.Button btnImport;
         private StaticText lblResumen;
-        private StaticText lblProgress; // etiqueta para progreso
+        private StaticText lblProgress;
         private readonly IImportService _importService;
         private readonly ILogger _logger;
         private CancellationTokenSource _cts;
 
+        // Service Layer credentials (ajustá aquí)
+        private const string SL_BASE_URL = "https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1";
+        private const string SL_USER = "gschneider";
+        private const string SL_PASS = "TzLt3#MA";
+        private const string SL_COMPANY = "SBP_SIOC_CHAR";
+
         public FrmImportar(SAPbouiCOM.Application application)
         {
             SBO_Application = application;
-
-            // obtener servicios desde provider simples (asegúrate de registrar antes)
             _logger = SimpleServiceProvider.Get<ILogger>();
             _importService = SimpleServiceProvider.Get<IImportService>();
         }
@@ -56,12 +58,10 @@ namespace PadronSaltaAddOn.UI.Forms
 
             int left = 20, top = 30, lblWidth = 150, fieldWidth = 250, spacing = 30;
 
-            // ID
             AddLabel("lblId", "ID:", left, top);
             txtId = AddEditText("txtId", left + lblWidth, top, fieldWidth);
             txtId.Value = "1";
 
-            // Período
             top += spacing;
             AddLabel("lblPeriodo", "Período a Procesar:", left, top);
             cmbPeriodo = AddComboBox("cmbPeriodo", left + lblWidth, top, fieldWidth);
@@ -71,29 +71,23 @@ namespace PadronSaltaAddOn.UI.Forms
             cmbPeriodo.ValidValues.Add("4", "Ejecución 4 - Cuarto Trimestre");
             cmbPeriodo.Select("1", BoSearchKey.psk_ByValue);
 
-            // Archivo
             top += spacing;
             AddLabel("lblArchivo", "Archivo a procesar:", left, top);
             txtArchivo = AddEditText("txtArchivo", left + lblWidth, top, fieldWidth - 60);
             btnBrowse = AddButton("btnBrowse", "...", left + lblWidth + fieldWidth - 50, top, 40);
 
-            // Botón Importar
             top += spacing * 2;
             btnImport = AddButton("btnImport", "Importar y Procesar", left + lblWidth, top, 200);
 
-            // Resumen
             top += spacing * 2;
             lblResumen = AddLabel("lblResumen", "", left, top);
             lblResumen.Item.Width = 450;
 
-            // Progress label
             top += spacing + 10;
             lblProgress = AddLabel("lblProgr", "Progreso: 0%", left, top);
             lblProgress.Item.Width = 450;
 
-            // Eventos
             SBO_Application.ItemEvent += SBO_Application_ItemEvent;
-
             oForm.Visible = true;
         }
 
@@ -101,7 +95,6 @@ namespace PadronSaltaAddOn.UI.Forms
         {
             BubbleEvent = true;
 
-            // Procesar cola justo al activar el form
             if (FormUID == "FrmImp" && pVal.EventType == BoEventTypes.et_FORM_ACTIVATE)
             {
                 ProcesarColaDeArchivos();
@@ -113,7 +106,6 @@ namespace PadronSaltaAddOn.UI.Forms
             if (pVal.EventType == BoEventTypes.et_ITEM_PRESSED && pVal.ItemUID == "btnImport")
             {
                 BubbleEvent = false;
-                // iniciar proceso asincrónico
                 _ = Task.Run(() => StartImportAsync());
             }
 
@@ -145,11 +137,8 @@ namespace PadronSaltaAddOn.UI.Forms
                     oForm.Freeze(false);
                 }
             }
-
         }
-            // --------------------------------------------
-            // HELPERS UI
-            // --------------------------------------------
+
         private StaticText AddLabel(string uid, string caption, int left, int top)
         {
             Item item = oForm.Items.Add(uid, BoFormItemTypes.it_STATIC);
@@ -192,17 +181,17 @@ namespace PadronSaltaAddOn.UI.Forms
 
         private void SeleccionarArchivo()
         {
-            var t = new System.Threading.Thread(() =>
+            var t = new Thread(() =>
             {
                 try
                 {
-                    using (var dialog = new OpenFileDialog())
+                    using (var dialog = new System.Windows.Forms.OpenFileDialog())
                     {
                         dialog.Filter = "Archivos CSV|*.csv|Todos los archivos|*.*";
                         dialog.Title = "Seleccionar archivo de padrón";
                         dialog.RestoreDirectory = true;
 
-                        if (dialog.ShowDialog() == DialogResult.OK)
+                        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
                         {
                             _filePathQueue.Enqueue(dialog.FileName);
                         }
@@ -218,12 +207,10 @@ namespace PadronSaltaAddOn.UI.Forms
             t.Start();
         }
 
-        // Inicia la importación (orquesta, async)
         private async Task StartImportAsync()
         {
             try
             {
-                // Leer path actual del campo (en el hilo del add-on, acceder con caution)
                 string path;
                 try
                 {
@@ -241,10 +228,8 @@ namespace PadronSaltaAddOn.UI.Forms
                     return;
                 }
 
-                // Preparar cancellation token
                 _cts = new CancellationTokenSource();
 
-                // Deshabilitar botón mientras procesa
                 SetButtonEnabled("btnImport", false);
                 SetButtonEnabled("btnBrowse", false);
 
@@ -254,73 +239,61 @@ namespace PadronSaltaAddOn.UI.Forms
                     SBO_Application.StatusBar.SetText($"Importando... {pct}%", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
                 });
 
-                // Llamada al servicio con un onBatch simple que guarda (simulado)
-                await _importService.ImportFileAsync(
-                    path,
-                    progress,
-                    _cts.Token,
-
-                    async (batch) =>
+                // Crear SL una sola vez por importación
+                using (var sl = new ServiceLayerClient(SL_BASE_URL, SL_USER, SL_PASS, SL_COMPANY, _logger))
+                {
+                    try
                     {
-                        using (var sl = new ServiceLayerClient(
-                            "https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/",
-                            "gschneider",
-                            "TzLt3#MA",
-                            "SBP_SIOC_CHAR",
-                            _logger
-                        ))
+                        await sl.LoginAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error("Error conectando SL: ", ex);
+                        throw;
+                    }
+
+                    var psaltaService = new SapPSaltaService(sl);
+
+                    // callback para el import service: procesa lote usando la misma instancia SL
+                    Func<IEnumerable<string>, Task> onBatch = async (batch) =>
+                    {
+                        _logger.Info($"Persistiendo lote de {batch?.AsListOrCount() ?? 0} lineas...");
+                        foreach (var line in batch)
                         {
+                            if (string.IsNullOrWhiteSpace(line)) continue;
+
+                            // parsear columnas (adaptar separador)
+                            var cols = line.Split('\t');
+
+                            var dto = new PSaltaDto
+                            {
+                                Code = cols.Length > 0 ? cols[0].Trim() : "",
+                                Name = cols.Length > 1 ? cols[1].Trim() : "",
+                                U_Anio = cols.Length > 2 ? cols[2].Trim() : "",
+                                U_Padron = cols.Length > 3 ? cols[3].Trim() : "",
+                                U_Cuit = cols.Length > 4 ? cols[4].Trim() : (cols.Length > 0 ? cols[0].Trim() : ""),
+                                U_Inscripcion = cols.Length > 5 ? cols[5].Trim() : "--",
+                                U_Riesgo = cols.Length > 6 ? cols[6].Trim() : "--",
+                                U_Notas = null,
+                                U_Procesado = null
+                            };
 
                             try
                             {
-                                await sl.LoginAsync();
-                                Console.WriteLine("LOGIN OK:");
+                                await psaltaService.InsertAsync(dto).ConfigureAwait(false);
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine("ERROR: " + ex.Message);
-                                _logger.Error($"Error conectando SL: ", ex);
-                                
+                                _logger.Error($"Error insertando fila CSV: {line}", ex);
                                 throw;
                             }
-
-                            var psaltaService = new SapPSaltaService(sl);
-
-                            foreach (var line in batch)
-                            {
-                                if (string.IsNullOrWhiteSpace(line))
-                                    continue;
-
-                                var cols = line.Split('\t'); // ← adaptar si tu CSV usa coma
-
-                                var dto = new PSaltaDto
-                                {
-                                    Code = cols[0],
-                                    Name = cols[1],
-                                    U_Anio = cols[2],
-                                    U_Padron = cols[3],
-                                    U_Cuit = cols[0],
-                                    U_Inscripcion = "--",
-                                    U_Riesgo = cols[3],
-                                    U_Notas = null,
-                                    U_Procesado = null
-                                };
-
-                                try
-                                {
-                                    await psaltaService.InsertAsync(dto);
-                                }
-                                catch (Exception ex)
-                                {
-                                    _logger.Error($"Error insertando fila CSV: {line}", ex);
-                                    throw;
-                                }
-                            }
                         }
-                        _logger.Info($"Persistiendo lote de {batch?.AsListOrCount() ?? 0} lineas...");
+                    };
 
-                    });
-                // Al finalizar
+                    // ejecutar import
+                    await _importService.ImportFileAsync(path, progress, _cts.Token, onBatch).ConfigureAwait(false);
+                }
+
                 UpdateSummary("Importación finalizada correctamente.");
                 SBO_Application.StatusBar.SetText("Importación finalizada correctamente.", BoMessageTime.bmt_Medium, BoStatusBarMessageType.smt_Success);
             }
@@ -388,7 +361,6 @@ namespace PadronSaltaAddOn.UI.Forms
         }
     }
 
-    // Helper extension local
     internal static class EnumerableHelpers
     {
         public static int AsListOrCount<T>(this IEnumerable<T> e)
@@ -399,4 +371,3 @@ namespace PadronSaltaAddOn.UI.Forms
         }
     }
 }
-

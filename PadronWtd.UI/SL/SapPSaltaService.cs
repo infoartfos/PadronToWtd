@@ -13,6 +13,7 @@ namespace PadronSaltaAddOn.UI.SL
 
         public Task<string> InsertAsync(PSaltaDto dto)
         {
+            // Resource name tal como en Service Layer
             return _client.PostAsync("P_Salta", dto);
         }
     }
