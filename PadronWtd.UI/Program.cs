@@ -1,6 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using PadronSaltaAddOn.UI.DI;
+using PadronSaltaAddOn.UI.Logging;
 using SAPbouiCOM.Framework;
+using System;
+using System.Collections.Generic;
+using System.IO;
 
 namespace PadronWtd.UI
 {
@@ -23,6 +26,23 @@ namespace PadronWtd.UI
                     //oApp = new Application(args[0], "XXXXX");
                     oApp = new Application(args[0]);
                 }
+
+                //try
+                //{
+                //    var logger = new FileLogger(@"C:\ProgramData\PadronWtd\test_directo.log");
+                //    logger.Info("PRUEBA DE LOG DIRECTO");
+                //}
+                //catch (Exception ex)
+                //{
+                //    System.Windows.Forms.MessageBox.Show("ERROR LOG DIRECTO: " + ex.Message);
+                //}
+
+                string appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "PadronWtd");
+                
+                string logFile = Path.Combine(appData, "padron_import.log");
+                SimpleServiceProvider.RegisterDefaults(logFile);
+
+
                 Menu MyMenu = new Menu();
                 MyMenu.AddMenuItems();
                 oApp.RegisterMenuEventHandler(MyMenu.SBO_Application_MenuEvent);
