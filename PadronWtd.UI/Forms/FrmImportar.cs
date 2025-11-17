@@ -1,6 +1,7 @@
 ﻿using PadronSaltaAddOn.UI.DI;
 using PadronSaltaAddOn.UI.Logging;
 using PadronSaltaAddOn.UI.Services;
+using PadronSaltaAddOn.UI.SL;
 using SAPbobsCOM;
 using SAPbouiCOM;
 using System;
@@ -258,14 +259,73 @@ namespace PadronSaltaAddOn.UI.Forms
                     path,
                     progress,
                     _cts.Token,
+
                     async (batch) =>
                     {
-                        // Aquí podés mapear batch->entidades y llamar repositorios.
-                        // Demo: simulamos demora por lote y logueamos
-                        _logger.Info($"Persistiendo lote de {batch?.AsListOrCount() ?? 0} lineas...");
-                        await Task.Delay(50); // simulación
-                    });
+                        using (var sl = new ServiceLayerClient(
+                            "https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/",
+                            //"gschneider",
+                            //"TzLt3#MA",
+                            //"SBP_SIOC_CHAR",
+                            _logger
+                        ))
+                        {
 
+                            try
+                            {
+                                string loginResult = await sl.LoginAsync(
+                                    user: "gschneider",
+                                    pass: "TzLt3#MA",
+                                    company: "SBP_SIOC_CHAR"
+                                );
+
+                                Console.WriteLine("LOGIN OK:");
+                                Console.WriteLine(loginResult);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("ERROR: " + ex.Message);
+                                _logger.Error($"Error conectando SL: ", ex);
+                                
+                                throw;
+                            }
+
+                            var psaltaService = new SapPSaltaService(sl);
+
+                            foreach (var line in batch)
+                            {
+                                if (string.IsNullOrWhiteSpace(line))
+                                    continue;
+
+                                var cols = line.Split('\t'); // ← adaptar si tu CSV usa coma
+
+                                var dto = new PSaltaDto
+                                {
+                                    Code = cols[0],
+                                    Name = cols[1],
+                                    U_Anio = cols[2],
+                                    U_Padron = cols[3],
+                                    U_Cuit = cols[0],
+                                    U_Inscripcion = "--",
+                                    U_Riesgo = cols[3],
+                                    U_Notas = null,
+                                    U_Procesado = null
+                                };
+
+                                try
+                                {
+                                    await psaltaService.InsertAsync(dto);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.Error($"Error insertando fila CSV: {line}", ex);
+                                    throw;
+                                }
+                            }
+                        }
+                        _logger.Info($"Persistiendo lote de {batch?.AsListOrCount() ?? 0} lineas...");
+
+                    });
                 // Al finalizar
                 UpdateSummary("Importación finalizada correctamente.");
                 SBO_Application.StatusBar.SetText("Importación finalizada correctamente.", BoMessageTime.bmt_Medium, BoStatusBarMessageType.smt_Success);
