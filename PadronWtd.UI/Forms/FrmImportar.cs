@@ -264,9 +264,6 @@ namespace PadronSaltaAddOn.UI.Forms
                     {
                         using (var sl = new ServiceLayerClient(
                             "https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/",
-                            //"gschneider",
-                            //"TzLt3#MA",
-                            //"SBP_SIOC_CHAR",
                             _logger
                         ))
                         {

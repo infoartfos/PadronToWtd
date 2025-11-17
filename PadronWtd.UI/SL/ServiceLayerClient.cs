@@ -13,6 +13,7 @@ namespace PadronSaltaAddOn.UI.SL
     {
         private readonly HttpClient _http;
         private readonly ILogger _logger;
+        public string SessionId { get; private set; }
 
         public ServiceLayerClient(string baseUrl, ILogger logger)
         {
@@ -52,8 +53,8 @@ namespace PadronSaltaAddOn.UI.SL
                 CompanyDB = company
             };
 
-            string json = JsonConvert.SerializeObject(payload);
-            var content = new StringContent(json, new UTF8Encoding(false), "application/json");
+            var json = JsonConvert.SerializeObject(payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _http.PostAsync("Login", content);
             string body = await response.Content.ReadAsStringAsync();
@@ -61,17 +62,39 @@ namespace PadronSaltaAddOn.UI.SL
             if (!response.IsSuccessStatusCode)
                 throw new Exception($"Login SL FAILED. Status={response.StatusCode} BODY={body}");
 
+            // EXTRAER COOKIE B1SESSION
+            if (response.Headers.TryGetValues("Set-Cookie", out var cookieHeaders))
+            {
+                foreach (var c in cookieHeaders)
+                {
+                    if (c.StartsWith("B1SESSION"))
+                    {
+                        SessionId = c.Split('=')[1].Split(';')[0];
+                    }
+                }
+            }
+
+            // AGREGAR HEADER PARA TODAS LAS LLAMADAS
+            if (!string.IsNullOrWhiteSpace(SessionId))
+            {
+                _http.DefaultRequestHeaders.Remove("B1S-Session");
+                _http.DefaultRequestHeaders.Add("B1S-Session", SessionId);
+            }
+
             return body;
         }
 
 
         public async Task<string> PostAsync(string resource, object data)
         {
+            if (string.IsNullOrWhiteSpace(SessionId))
+                throw new Exception("SL Session not initialized.");
+
             var json = JsonConvert.SerializeObject(data);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var resp = await _http.PostAsync(resource, content).ConfigureAwait(false);
-            var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var resp = await _http.PostAsync(resource, content);
+            var body = await resp.Content.ReadAsStringAsync();
 
             if (!resp.IsSuccessStatusCode)
                 throw new Exception("Error SL (" + resp.StatusCode + "): " + body);
