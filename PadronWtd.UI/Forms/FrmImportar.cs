@@ -264,20 +264,17 @@ namespace PadronSaltaAddOn.UI.Forms
                     {
                         using (var sl = new ServiceLayerClient(
                             "https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/",
+                            "gschneider",
+                            "TzLt3#MA",
+                            "SBP_SIOC_CHAR",
                             _logger
                         ))
                         {
 
                             try
                             {
-                                string loginResult = await sl.LoginAsync(
-                                    user: "gschneider",
-                                    pass: "TzLt3#MA",
-                                    company: "SBP_SIOC_CHAR"
-                                );
-
+                                await sl.LoginAsync();
                                 Console.WriteLine("LOGIN OK:");
-                                Console.WriteLine(loginResult);
                             }
                             catch (Exception ex)
                             {

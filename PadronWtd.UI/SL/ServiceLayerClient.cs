@@ -3,110 +3,166 @@ using PadronSaltaAddOn.UI.Logging;
 using System;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PadronSaltaAddOn.UI.SL
 {
     public class ServiceLayerClient : IDisposable
     {
-        private readonly HttpClient _http;
+        private static HttpClient _http; // singleton
         private readonly ILogger _logger;
-        public string SessionId { get; private set; }
 
-        public ServiceLayerClient(string baseUrl, ILogger logger)
+        private readonly string _baseUrl;
+        private readonly string _user;
+        private readonly string _password;
+        private readonly string _company;
+
+        private readonly CookieContainer _cookies;
+        private CancellationTokenSource _keepAliveToken;
+
+        public ServiceLayerClient(string baseUrl, string user, string password, string company, ILogger logger)
         {
-            ServicePointManager.ServerCertificateValidationCallback += (a, b, c, d) => true;
-            ServicePointManager.SecurityProtocol =
-                SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+            _logger = logger;
+            _baseUrl = baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/";
+            _user = user;
+            _password = password;
+            _company = company;
 
-            var cookies = new CookieContainer();
+            _logger.Info("Inicializando ServiceLayerClient…");
+
+            // Ignorar certificados SSL (SAP SL con cert self-signed)
+            ServicePointManager.ServerCertificateValidationCallback =
+                (sender, cert, chain, sslPolicyErrors) => true;
+
+            ServicePointManager.SecurityProtocol =
+                SecurityProtocolType.Tls12 |
+                SecurityProtocolType.Tls11 |
+                SecurityProtocolType.Tls;
+
+            _cookies = new CookieContainer();
 
             var handler = new HttpClientHandler
             {
                 UseCookies = true,
-                CookieContainer = cookies,
-                AllowAutoRedirect = true,
+                CookieContainer = _cookies,
                 ServerCertificateCustomValidationCallback =
                     HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
             };
 
-            _logger = logger;
-            _logger.Info("URL -> " + baseUrl);
-            _http = new HttpClient(handler)
+            if (_http == null)
             {
-                BaseAddress = new Uri(baseUrl)     // OJO: sin "/" al final
-            };
+                _http = new HttpClient(handler)
+                {
+                    BaseAddress = new Uri(_baseUrl),
+                    Timeout = TimeSpan.FromMinutes(10)
+                };
 
-            _http.DefaultRequestHeaders.ExpectContinue = false;
-            _http.DefaultRequestHeaders.ConnectionClose = false;
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/4.0");
+                _http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0");
+            }
+
+            StartKeepAlive();
         }
 
-        public async Task<string> LoginAsync(string user, string pass, string company)
+        // ---------------------------------------------------------------------
+        // LOGIN
+        // ---------------------------------------------------------------------
+        public async Task LoginAsync()
         {
+            _logger.Info("Haciendo LOGIN en Service Layer…");
+
             var payload = new
             {
-                UserName = user,
-                Password = pass,
-                CompanyDB = company
+                UserName = _user,
+                Password = _password,
+                CompanyDB = _company
             };
 
             var json = JsonConvert.SerializeObject(payload);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _http.PostAsync("Login", content);
-            string body = await response.Content.ReadAsStringAsync();
+            var resp = await _http.PostAsync("Login", content);
+            var body = await resp.Content.ReadAsStringAsync();
 
-            if (!response.IsSuccessStatusCode)
-                throw new Exception($"Login SL FAILED. Status={response.StatusCode} BODY={body}");
-
-            // EXTRAER COOKIE B1SESSION
-            if (response.Headers.TryGetValues("Set-Cookie", out var cookieHeaders))
+            if (!resp.IsSuccessStatusCode)
             {
-                foreach (var c in cookieHeaders)
-                {
-                    if (c.StartsWith("B1SESSION"))
-                    {
-                        SessionId = c.Split('=')[1].Split(';')[0];
-                    }
-                }
+                _logger.Error("LOGIN SL FALLÓ: " + body);
+                throw new Exception("Login SL FAILED: " + body);
             }
 
-            // AGREGAR HEADER PARA TODAS LAS LLAMADAS
-            if (!string.IsNullOrWhiteSpace(SessionId))
-            {
-                _http.DefaultRequestHeaders.Remove("B1S-Session");
-                _http.DefaultRequestHeaders.Add("B1S-Session", SessionId);
-            }
-
-            return body;
+            _logger.Info("Login SL OK.");
         }
 
-
+        // ---------------------------------------------------------------------
+        // POST GENÉRICO CON RETRY AUTOMÁTICO DE ERROR 301
+        // ---------------------------------------------------------------------
         public async Task<string> PostAsync(string resource, object data)
         {
-            if (string.IsNullOrWhiteSpace(SessionId))
-                throw new Exception("SL Session not initialized.");
-
             var json = JsonConvert.SerializeObject(data);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var resp = await _http.PostAsync(resource, content);
-            var body = await resp.Content.ReadAsStringAsync();
+            string body = await resp.Content.ReadAsStringAsync();
+
+            if (resp.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                _logger.Warn("SL devolvió 301 (Invalid session). Haciendo RE-LOGIN automáticamente…");
+
+                await LoginAsync();
+
+                // Reintento
+                content = new StringContent(json, Encoding.UTF8, "application/json");
+                resp = await _http.PostAsync(resource, content);
+                body = await resp.Content.ReadAsStringAsync();
+            }
 
             if (!resp.IsSuccessStatusCode)
-                throw new Exception("Error SL (" + resp.StatusCode + "): " + body);
+            {
+                _logger.Error($"Error SL ({resp.StatusCode}): {body}");
+                throw new Exception($"Error SL ({resp.StatusCode}): {body}");
+            }
 
             return body;
         }
 
+        // ---------------------------------------------------------------------
+        // KEEP-ALIVE
+        // ---------------------------------------------------------------------
+        private void StartKeepAlive()
+        {
+            _keepAliveToken = new CancellationTokenSource();
+            var ct = _keepAliveToken.Token;
+
+            Task.Run(async () =>
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await Task.Delay(10000, ct); // cada 10s
+                        await _http.GetAsync("Ping");
+                    }
+                    catch { /* No importa, es keep-alive */ }
+                }
+            }, ct);
+        }
+
+        // ---------------------------------------------------------------------
+        // LOGOUT + STOP
+        // ---------------------------------------------------------------------
         public void Dispose()
         {
             try
             {
-                _http.PostAsync("Logout", new StringContent("")).Wait(500);
+                _logger.Info("Cerrando sesión SL…");
+                _http.PostAsync("Logout", new StringContent("")).Wait(3000);
+            }
+            catch { }
+
+            try
+            {
+                _keepAliveToken?.Cancel();
             }
             catch { }
         }
