@@ -55,6 +55,14 @@
     <Compile Include="Services\DummyWtdService.cs" />
     <Compile Include="Utils\CsvImporter.cs" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="..\PadronWtd.Domain\PadronWtd.Domain.csproj">
+      <Project>{bbcb479f-d937-6fb5-bdb0-17f8d26fdeee}</Project>
+      <Name>PadronWtd.Domain</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <WCFMetadata Include="Connected Services\" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
