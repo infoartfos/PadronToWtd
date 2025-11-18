@@ -1,183 +1,212 @@
 ﻿using System;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace PadronWtd.UI.SL { 
+namespace PadronWtd.UI.SL
+{
+    public class ServiceLayerAuthException : Exception
+    {
+        public ServiceLayerAuthException(string msg) : base(msg) { }
+    }
 
-        public class ServiceLayerAuthException : Exception
-        {
-            public ServiceLayerAuthException(string msg) : base(msg) { }
-        }
-public class ServiceLayerClient : IDisposable
+    public class ServiceLayerClient : IDisposable
     {
         private readonly Uri _baseUri;
+
         private HttpClient _client;
-        private CookieContainer _cookieContainer;
+        private CookieContainer _cookies;
+
+        private string _user;
+        private string _pass;
+        private string _company;
+
         private string _sessionId;
+        private string _routeId; // para sticky session
 
         public ServiceLayerClient(string baseUrl)
         {
             _baseUri = new Uri(baseUrl);
         }
 
-        // -----------------------------
-        // LOGIN EXACTO COMO CURL
-        // -----------------------------
+        // ============================================================
+        // LOGIN (con manejo de cluster)
+        // ============================================================
         public async Task<bool> LoginAsync(string user, string pass, string company)
         {
-            // 1) El login NO usa cookies
-            var handler = new HttpClientHandler
-            {
-                UseCookies = false,
-                ServerCertificateCustomValidationCallback = (a, b, c, d) => true
-            };
+            _user = user;
+            _pass = pass;
+            _company = company;
 
-            var loginClient = new HttpClient(handler)
-            {
-                BaseAddress = _baseUri
-            };
+            int intentos = 0;
+            const int maxIntentos = 5;
 
-            var loginJson = JsonConvert.SerializeObject(new
+            while (intentos < maxIntentos)
             {
-                UserName = user,
-                Password = pass,
-                CompanyDB = company
-            });
+                intentos++;
 
-            var req = new HttpRequestMessage(HttpMethod.Post, "Login")
-            {
-                Content = new StringContent(loginJson, Encoding.UTF8, "application/json")
-            };
+                Console.WriteLine("Intento de login #" + intentos);
 
-            var resp = await loginClient.SendAsync(req);
-            var body = await resp.Content.ReadAsStringAsync();
+                _cookies = new CookieContainer();
 
-            if (!resp.IsSuccessStatusCode)
-            {
-                Console.WriteLine($"Login ERROR {resp.StatusCode}: {body}");
-                return false;
+                var handler = new HttpClientHandler();
+                handler.CookieContainer = _cookies;
+                handler.UseCookies = true;
+                handler.ServerCertificateCustomValidationCallback =
+                    (a, b, c, d) => true;
+
+                var loginClient = new HttpClient(handler);
+                loginClient.BaseAddress = _baseUri;
+
+                var body = new
+                {
+                    UserName = user,
+                    Password = pass,
+                    CompanyDB = company
+                };
+
+                string json = JsonConvert.SerializeObject(body);
+
+                HttpResponseMessage response = null;
+                try
+                {
+                    response = await loginClient.PostAsync(
+                        "Login",
+                        new StringContent(json, Encoding.UTF8, "application/json")
+                    );
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("ERROR login: " + ex.Message);
+                    continue;
+                }
+
+                var text = await response.Content.ReadAsStringAsync();
+
+                Console.WriteLine("STATUS = " + response.StatusCode);
+                Console.WriteLine("BODY = " + text);
+
+                // ERROR CLÁSICO DE CLUSTER:
+                // 500 + BODY vacío = nodo SL roto
+                if (response.StatusCode == HttpStatusCode.InternalServerError &&
+                    string.IsNullOrEmpty(text))
+                {
+                    Console.WriteLine("Nodo SL falló. Reintentando con otro nodo...");
+                    await Task.Delay(400);
+                    continue;
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("Login fallo en intento " + intentos);
+                    await Task.Delay(300);
+                    continue;
+                }
+
+                dynamic js = JsonConvert.DeserializeObject(text);
+                _sessionId = js.SessionId;
+
+                // Leer ROUTEID (si existe)
+                _routeId = null;
+                var col = _cookies.GetCookies(_baseUri);
+                foreach (Cookie ck in col)
+                    if (ck.Name.ToUpper().Contains("ROUTE"))
+                        _routeId = ck.Value;
+
+                Console.WriteLine("Login OK con SessionId " + _sessionId +
+                    " en nodo " + _routeId);
+
+                // Crear cliente real
+                _client = new HttpClient(new HttpClientHandler
+                {
+                    CookieContainer = _cookies,
+                    UseCookies = true,
+                    ServerCertificateCustomValidationCallback = (a, b, c, d) => true
+                });
+
+                _client.BaseAddress = _baseUri;
+                return true;
             }
 
-            // 2) Parseo el sessionId desde la respuesta
-            dynamic json = JsonConvert.DeserializeObject(body);
-            _sessionId = json.SessionId;
-
-            Console.WriteLine("Login OK. SessionId=" + _sessionId);
-
-            // 3) CREO EL CLIENTE REAL con cookies
-            _cookieContainer = new CookieContainer();
-            _cookieContainer.Add(_baseUri, new Cookie("B1SESSION", _sessionId));
-
-            var realHandler = new HttpClientHandler
-            {
-                CookieContainer = _cookieContainer,
-                UseCookies = true,
-                ServerCertificateCustomValidationCallback = (a, b, c, d) => true
-            };
-
-            _client = new HttpClient(realHandler)
-            {
-                BaseAddress = _baseUri
-            };
-
-            return true;
+            Console.WriteLine("NO SE LOGUEO tras " + maxIntentos + " intentos.");
+            return false;
         }
 
-        // -----------------------------
-        // LOGOUT
-        // -----------------------------
-        public async Task LogoutAsync()
+        // ============================================================
+        // Re-login automático
+        // ============================================================
+        private async Task Relogin()
         {
-            try
-            {
-                if (_client == null)
-                    return;
+            Console.WriteLine("Haciendo re-login automático…");
 
-                await _client.PostAsync("Logout", null);
-            }
-            catch { }
-        }
-
-        // -----------------------------
-        // POST con autorelogin
-        // -----------------------------
-        public async Task<string> PostAsync(string path, object payload)
-        {
-            EnsureLogged();
-
-            var json = JsonConvert.SerializeObject(payload);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            var response = await _client.PostAsync(path, content);
-            var body = await response.Content.ReadAsStringAsync();
-
-            if (response.StatusCode == HttpStatusCode.Unauthorized ||
-                body.Contains("SessionTimeout"))
-            {
-                Console.WriteLine("Session expired. Doing auto re-login...");
-                await ReloginAsync();
-                return await PostAsync(path, payload); // retry
-            }
-
-            if (!response.IsSuccessStatusCode)
-                throw new Exception($"POST {path} failed: {body}");
-
-            return body;
-        }
-
-        // -----------------------------
-        // GET con autorelogin
-        // -----------------------------
-        public async Task<string> GetAsync(string path)
-        {
-            EnsureLogged();
-
-            var response = await _client.GetAsync(path);
-            var body = await response.Content.ReadAsStringAsync();
-
-            if (response.StatusCode == HttpStatusCode.Unauthorized ||
-                body.Contains("SessionTimeout"))
-            {
-                Console.WriteLine("Session expired. Doing auto re-login...");
-                await ReloginAsync();
-                return await GetAsync(path); // retry
-            }
-
-            if (!response.IsSuccessStatusCode)
-                throw new Exception($"GET {path} failed: {body}");
-
-            return body;
-        }
-
-        // -----------------------------
-        // AUTO REL0GIN
-        // -----------------------------
-        private async Task ReloginAsync()
-        {
-            Console.WriteLine("Re-login...");
-
-            // Limpio cookies
-            _cookieContainer = new CookieContainer();
-
-            // hago login desde cero
-            // OJO: aquí deberías guardar user/pass/company en campos privados
-            //      para no pedirlos de nuevo
-            throw new NotImplementedException("Guardá user/pass/company en variables internas para relogin automático.");
+            bool ok = await LoginAsync(_user, _pass, _company);
+            if (!ok)
+                throw new ServiceLayerAuthException("Re-login falló.");
         }
 
         private void EnsureLogged()
         {
             if (_client == null)
-                throw new Exception("No session. Call LoginAsync() first.");
+                throw new Exception("Debe llamar LoginAsync() primero");
+        }
+
+        // ============================================================
+        // POST genérico con reintento + manejo cluster
+        // ============================================================
+        public async Task<string> PostAsync(string path, object data)
+        {
+            EnsureLogged();
+
+            string json = JsonConvert.SerializeObject(data);
+
+            HttpResponseMessage resp = null;
+            string txt = null;
+
+            try
+            {
+                resp = await _client.PostAsync(
+                    path,
+                    new StringContent(json, Encoding.UTF8, "application/json")
+                );
+
+                txt = await resp.Content.ReadAsStringAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("ERROR POST: " + ex.Message);
+                throw;
+            }
+
+            // Ver si expira sesión
+            if (resp.StatusCode == HttpStatusCode.Unauthorized ||
+                (txt != null && txt.Contains("SessionTimeout")))
+            {
+                Console.WriteLine("POST → SessionTimeout. Haciendo Re-login...");
+                await Relogin();
+                return await PostAsync(path, data);
+            }
+
+            // Si SL devuelve 500 pero sigue con cookie ROUTEID,
+            // puede ser un nodo caído → reintentar 1 vez.
+            if ((int)resp.StatusCode == 500)
+            {
+                Console.WriteLine("POST → Error 500. Reintentando 1 vez...");
+                await Relogin();
+                return await PostAsync(path, data);
+            }
+
+            if (!resp.IsSuccessStatusCode)
+                throw new Exception("SL Error: " + txt);
+
+            return txt;
         }
 
         public void Dispose()
         {
-            _client?.Dispose();
+            if (_client != null)
+                _client.Dispose();
         }
     }
 }

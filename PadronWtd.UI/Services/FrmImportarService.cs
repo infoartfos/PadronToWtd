@@ -10,6 +10,10 @@ using System.Threading.Tasks;
 
 namespace PadronWtd.UI.Services
 {
+    public class ServiceLayerAuthException : Exception
+    {
+        public ServiceLayerAuthException(string msg) : base(msg) { }
+    }
     public class ImportResult
     {
         public int Ok { get; set; }
@@ -37,6 +41,16 @@ namespace PadronWtd.UI.Services
 
         public async Task<ImportResult> ImportarAsync(string csvPath, Action<string> log)
         {
+
+            log("Iniciando login contra Service Layer...");
+
+            var okLogin = await _sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
+
+            if (!okLogin)
+                throw new Exception("No se pudo iniciar sesión en Service Layer");
+
+            log("Login OK.");
+
             var result = new ImportResult();
 
             var lineas = File.ReadAllLines(csvPath);
