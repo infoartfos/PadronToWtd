@@ -17,7 +17,7 @@ namespace PadronWtd.DebugRunner
         {
             _logger = SimpleServiceProvider.Get<ILogger>();
             // No existe _app (SAP) en debug mode, lo reemplazamos por null
-            _sl = new ServiceLayerClient(_logger);
+            _sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
 
             // Pasamos null como Application (no se usa para debug)
             _service = new FrmImportarService(app: null, _sl);
@@ -29,7 +29,7 @@ namespace PadronWtd.DebugRunner
             string archivo = @"C:\Users\cvalicenti\source\repos\PadronToWtd\etc\padron.csv";
 
             Console.WriteLine($"Login SL...");
-            await _sl.LoginAsync();
+            await _sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
             Console.WriteLine($"Login OK.");
 
             Console.WriteLine($"Importando archivo: {archivo}");

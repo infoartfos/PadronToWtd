@@ -84,7 +84,7 @@ namespace PadronWtd.UI.Services
                 catch (ServiceLayerAuthException)
                 {
                     log("Token expirado. Reintentando login...");
-                    await _sl.LoginAsync();
+                    await _sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
                 }
                 catch (Exception ex)
                 {
