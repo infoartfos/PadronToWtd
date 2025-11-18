@@ -2,99 +2,161 @@
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Text;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 
-public class ServiceLayerPClient
+namespace PadronWtd.ServiceLayer
 {
-    private readonly string _baseUrl;
-    private readonly string _user;
-    private readonly string _password;
-    private readonly string _companyDb;
-
-    private HttpClient _client;
-    private CookieContainer _cookies = new CookieContainer();
-
-    public ServiceLayerPClient(string baseUrl, string user, string password, string companyDb)
+    public class ServiceLayerPClient : IDisposable
     {
-        _baseUrl = baseUrl.TrimEnd('/');
-        _user = user;
-        _password = password;
-        _companyDb = companyDb;
+        private readonly HttpClient _http;
+        private readonly CookieContainer _cookies;
+        private readonly string _baseUrl;
 
-        var handler = new HttpClientHandler
+        private string _sessionId;
+        private DateTime _sessionExpires;
+
+        public ServiceLayerPClient(string baseUrl)
         {
-            CookieContainer = _cookies,
-            UseCookies = true,
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-        };
+            _baseUrl = baseUrl.TrimEnd('/');
 
-        _client = new HttpClient(handler);
-        _client.Timeout = TimeSpan.FromSeconds(30);
-    }
+            _cookies = new CookieContainer();
 
-    public async Task<bool> LoginAsync()
-    {
-        try
-        {
-            var json = $"{{\"UserName\":\"{_user}\",\"Password\":\"{_password}\",\"CompanyDB\":\"{_companyDb}\"}}";
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            var response = await _client.PostAsync(_baseUrl + "/Login", content);
-
-            if (response.IsSuccessStatusCode)
+            var handler = new HttpClientHandler
             {
-                // Guarda cookies (SessionId y ROUTEID)
-                var setCookies = response.Headers.GetValues("Set-Cookie");
-                foreach (string cookie in setCookies)
+                CookieContainer = _cookies,
+                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) =>
                 {
-                    Console.WriteLine("COOKIE => " + cookie);
-                }
+                    // Aceptar certificados self-signed
+                    return true;
+                },
+                UseCookies = true
+            };
 
-                return true;
-            }
+            _http = new HttpClient(handler);
+            _http.DefaultRequestHeaders.Accept.Clear();
+            _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         }
-        catch (Exception e)
+
+        // =====================================
+        // LOGIN
+        // =====================================
+        public async Task LoginAsync(string user, string password, string company)
         {
-            Console.WriteLine("Login error: " + e.Message);
-        }
-
-        return false;
-    }
-
-    public async Task<string> GetAsync(string path)
-    {
-        return await SendWithFailoverAsync(() =>
-            _client.GetAsync(_baseUrl + path)
-        );
-    }
-
-    private async Task<string> SendWithFailoverAsync(Func<Task<HttpResponseMessage>> action)
-    {
-        HttpResponseMessage response = null;
-
-        try
-        {
-            response = await action();
-
-            // si el nodo está caído → SL devuelve 500/502/503
-            if ((int)response.StatusCode >= 500)
+            var body = new
             {
-                Console.WriteLine("Nodo caído. Reintentando login y redirigiendo...");
+                UserName = user,
+                Password = password,
+                CompanyDB = company
+            };
 
-                var ok = await LoginAsync();
-                if (!ok) throw new Exception("No se pudo reloguear en SL.");
+            var json = JsonConvert.SerializeObject(body);
 
-                response = await action(); // reintento
+            var response = await _http.PostAsync(
+                $"{_baseUrl}/Login",
+                new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+            );
+
+            string content = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"Login failed: {response.StatusCode} - {content}");
             }
 
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            dynamic o = JsonConvert.DeserializeObject(content);
+
+            _sessionId = o.SessionId;
+            int timeout = o.SessionTimeout;
+
+            _sessionExpires = DateTime.Now.AddMinutes(timeout - 1); // margen
+
+            // A partir del login la cookie B1SESSION queda guardada en el CookieContainer
         }
-        catch (Exception ex)
+
+        // =====================================
+        // LOGOUT
+        // =====================================
+        public async Task LogoutAsync()
         {
-            Console.WriteLine("Error SL: " + ex.Message);
-            throw;
+            await _http.PostAsync($"{_baseUrl}/Logout", null);
+        }
+
+        // =====================================
+        // Petición común con retry por SessionTimeout
+        // =====================================
+        public async Task<string> GetAsync(string relativeUrl)
+        {
+            if (SessionExpired())
+            {
+                await ReloginAsync();
+            }
+
+            HttpResponseMessage response = await _http.GetAsync($"{_baseUrl}/{relativeUrl}");
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                // Sesión expirada → volver a loguear
+                await ReloginAsync();
+
+                response = await _http.GetAsync($"{_baseUrl}/{relativeUrl}");
+            }
+
+            string content = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"GET failed: {response.StatusCode} - {content}");
+            }
+
+            return content;
+        }
+
+        // =====================================
+        // Verifica si expira
+        // =====================================
+        private bool SessionExpired()
+        {
+            if (string.IsNullOrEmpty(_sessionId))
+                return true;
+
+            return DateTime.Now >= _sessionExpires;
+        }
+
+        // =====================================
+        // Relogin automático
+        // =====================================
+        private async Task ReloginAsync()
+        {
+            if (string.IsNullOrEmpty(_lastUser) ||
+                string.IsNullOrEmpty(_lastPass) ||
+                string.IsNullOrEmpty(_lastCompany))
+            {
+                throw new Exception("Cannot re-login: missing stored credentials.");
+            }
+
+            await LoginAsync(_lastUser, _lastPass, _lastCompany);
+        }
+
+        // =====================================
+        // Guardar credenciales para el re-login
+        // =====================================
+        private string _lastUser;
+        private string _lastPass;
+        private string _lastCompany;
+
+        public async Task LoginWithRetryAsync(string user, string pass, string company)
+        {
+            _lastUser = user;
+            _lastPass = pass;
+            _lastCompany = company;
+
+            await LoginAsync(user, pass, company);
+        }
+
+        public void Dispose()
+        {
+            _http?.Dispose();
         }
     }
 }
