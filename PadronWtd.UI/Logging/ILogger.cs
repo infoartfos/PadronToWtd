@@ -1,4 +1,4 @@
-﻿namespace PadronSaltaAddOn.UI.Logging
+﻿namespace PadronWtd.UI.Logging
 {
     public interface ILogger
     {

@@ -1,23 +1,23 @@
-﻿using PadronSaltaAddOn.UI.DI;
-using PadronSaltaAddOn.UI.Logging;
-using PadronSaltaAddOn.UI.Services;
-using PadronSaltaAddOn.UI.SL;
+﻿using PadronWtd.UI.DI;
+using PadronWtd.UI.Logging;
+using PadronWtd.UI.Services;
+using PadronWtd.UI.SL;
 using SAPbouiCOM;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace PadronSaltaAddOn.UI.Forms
+namespace PadronWtd.UI.Forms
 {
     public class FrmImportar
     {
         private readonly SAPbouiCOM.Application SBO_Application;
         private SAPbouiCOM.Form oForm;
         private readonly ConcurrentQueue<string> _filePathQueue = new ConcurrentQueue<string>();
-
         private EditText txtId;
         private SAPbouiCOM.ComboBox cmbPeriodo;
         private EditText txtArchivo;
@@ -28,12 +28,6 @@ namespace PadronSaltaAddOn.UI.Forms
         private readonly IImportService _importService;
         private readonly ILogger _logger;
         private CancellationTokenSource _cts;
-
-        // Service Layer credentials (ajustá aquí)
-        private const string SL_BASE_URL = "https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1";
-        private const string SL_USER = "gschneider";
-        private const string SL_PASS = "TzLt3#MA";
-        private const string SL_COMPANY = "SBP_SIOC_CHAR";
 
         public FrmImportar(SAPbouiCOM.Application application)
         {
@@ -240,7 +234,9 @@ namespace PadronSaltaAddOn.UI.Forms
                 });
 
                 // Crear SL una sola vez por importación
-                using (var sl = new ServiceLayerClient(SL_BASE_URL, SL_USER, SL_PASS, SL_COMPANY, _logger))
+                //using (var sl = new ServiceLayerClient(SL_BASE_URL, SL_USER, SL_PASS, SL_COMPANY, _logger))
+                //using (var sl = new ServiceLayerClient())
+                var sl = new ServiceLayerClient(_logger);
                 {
                     try
                     {
@@ -359,6 +355,7 @@ namespace PadronSaltaAddOn.UI.Forms
                 try { oForm.Freeze(false); } catch { }
             }
         }
+
     }
 
     internal static class EnumerableHelpers

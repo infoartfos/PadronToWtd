@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using PadronSaltaAddOn.UI.Logging;
-using PadronSaltaAddOn.UI.Services;
+using PadronWtd.UI.Logging;
+using PadronWtd.UI.Services;
 
-namespace PadronSaltaAddOn.UI.DI
+namespace PadronWtd.UI.DI
 {
     public static class SimpleServiceProvider
     {
@@ -37,7 +37,7 @@ namespace PadronSaltaAddOn.UI.DI
         public static void RegisterDefaults(string logFilePath)
         {
             Register<ILogger>(() => new FileLogger(logFilePath));
-            Register<IImportService>(() => new FrmImportarService(Get<ILogger>()));
+            // Register<IImportService>(() => new FrmImportarService(Get<ILogger>()));
             Build();
         }
     }

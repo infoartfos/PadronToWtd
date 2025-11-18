@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace PadronSaltaAddOn.UI.Services
+namespace PadronWtd.UI.Services
 {
     public interface IImportService
     {

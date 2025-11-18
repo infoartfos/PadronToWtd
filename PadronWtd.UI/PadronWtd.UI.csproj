@@ -70,6 +70,7 @@
   <ItemGroup>
     <Compile Include="AppConstants.cs" />
     <Compile Include="AppSettings.cs" />
+    <Compile Include="DebugRunner\ImportRunner.cs" />
     <Compile Include="DI\SimpleServiceProvider.cs" />
     <Compile Include="Forms\FrmImportar.cs" />
     <Compile Include="Forms\MainForm.cs" />

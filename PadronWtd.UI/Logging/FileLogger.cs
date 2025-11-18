@@ -2,7 +2,7 @@
 using System.IO;
 using System.Text;
 
-namespace PadronSaltaAddOn.UI.Logging
+namespace PadronWtd.UI.Logging
 {
     internal class FileLogger : ILogger
     {

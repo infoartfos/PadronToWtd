@@ -1,4 +1,4 @@
-﻿namespace PadronSaltaAddOn.UI.SL
+﻿namespace PadronWtd.UI.SL
 {
     public class PSaltaDto
     {

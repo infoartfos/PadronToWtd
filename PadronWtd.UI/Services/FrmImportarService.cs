@@ -1,22 +1,103 @@
-﻿using System;
+﻿using PadronWtd.UI.Logging;
+using PadronWtd.UI.SL;
+using SAPbouiCOM.Framework;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using PadronSaltaAddOn.UI.Logging;
 
-namespace PadronSaltaAddOn.UI.Services
+namespace PadronWtd.UI.Services
 {
+    public class ImportResult
+    {
+        public int Ok { get; set; }
+        public int Errores { get; set; }
+    }
     internal class FrmImportarService : IImportService
     {
         private readonly ILogger _logger;
         private readonly int _batchSize;
+        private readonly ServiceLayerClient _sl;
 
-        public FrmImportarService(ILogger logger, int batchSize = 500)
+        private Application _app;  // puede ser null en debug
+
+        public FrmImportarService(Application app, ServiceLayerClient s1)
         {
-            _logger = logger;
-            _batchSize = batchSize;
+            _app = app;
+            _sl = s1;
+        }
+
+
+        //public FrmImportarService()
+        //{
+        //    _sl = new ServiceLayerClient();
+        //}
+
+        public async Task<ImportResult> ImportarAsync(string csvPath, Action<string> log)
+        {
+            var result = new ImportResult();
+
+            var lineas = File.ReadAllLines(csvPath);
+            log($"Archivo leído. {lineas.Length} líneas.");
+
+            foreach (var linea in lineas)
+            {
+                log($"Procesando: {linea}");
+
+                bool ok = await EjecutarConReintentosAsync(
+                    async () =>
+                    {
+                        // TODO: Parseo real
+                        var json = new
+                        {
+                            Name = linea,
+                            Code = linea.GetHashCode().ToString()
+                        };
+                        await _sl.PostAsync("/Items", json);
+                        return true;
+                    },
+                    log
+                );
+
+                if (ok)
+                    result.Ok++;
+                else
+                    result.Errores++;
+            }
+
+            return result;
+        }
+
+        private async Task<bool> EjecutarConReintentosAsync(Func<Task<bool>> action, Action<string> log)
+        {
+            int intentos = 0;
+
+            while (true)
+            {
+                try
+                {
+                    intentos++;
+                    return await action();
+                }
+                catch (ServiceLayerAuthException)
+                {
+                    log("Token expirado. Reintentando login...");
+                    await _sl.LoginAsync();
+                }
+                catch (Exception ex)
+                {
+                    if (intentos >= 3)
+                    {
+                        log("ERROR permanente: " + ex.Message);
+                        return false;
+                    }
+
+                    log($"Error transitorio: {ex.Message}. Reintentando {intentos}/3...");
+                    await Task.Delay(1000);
+                }
+            }
         }
 
         public async Task ImportFileAsync(
@@ -111,4 +192,6 @@ namespace PadronSaltaAddOn.UI.Services
             _logger.Info($"Importación finalizada. Total líneas: {totalLines}");
         }
     }
+
+
 }

@@ -1,6 +1,7 @@
-﻿using System.Threading.Tasks;
+﻿using PadronWtd.UI.SL;
+using System.Threading.Tasks;
 
-namespace PadronSaltaAddOn.UI.SL
+namespace PadronWtd.UI.SL
 {
     public class SapPSaltaService
     {

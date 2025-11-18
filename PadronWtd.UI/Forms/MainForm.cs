@@ -2,11 +2,11 @@
 using PadronWtd.UI.Constants;
 using SAPbouiCOM;
 using System;
-// using PadronSaltaAddOn.Application.Services;
+// using PadronWtd.Application.Services;
 
-// using PadronSaltaAddOn.Application.Services;
+// using PadronWtd.Application.Services;
 
-namespace PadronSaltaAddOn.UI.Forms
+namespace PadronWtd.UI.Forms
 {
     internal class MainForm
     {

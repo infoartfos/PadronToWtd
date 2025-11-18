@@ -1,9 +1,11 @@
-﻿using PadronSaltaAddOn.UI.DI;
-using PadronSaltaAddOn.UI.Logging;
+﻿using PadronWtd.DebugRunner;
+using PadronWtd.UI.DI;
+using PadronWtd.UI.Logging;
 using SAPbouiCOM.Framework;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace PadronWtd.UI
 {
@@ -11,22 +13,10 @@ namespace PadronWtd.UI
     {
 
         [STAThread]
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             try
             {
-                Application oApp = null;
-                if (args.Length < 1)
-                {
-                    oApp = new Application();
-                }
-                else
-                {
-                    //If you want to use an add-on identifier for the development license, you can specify an add-on identifier string as the second parameter.
-                    //oApp = new Application(args[0], "XXXXX");
-                    oApp = new Application(args[0]);
-                }
-
                 //try
                 //{
                 //    var logger = new FileLogger(@"C:\ProgramData\PadronWtd\test_directo.log");
@@ -38,10 +28,39 @@ namespace PadronWtd.UI
                 //}
 
                 string appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "PadronWtd");
-                
+
                 string logFile = Path.Combine(appData, "padron_import.log");
                 SimpleServiceProvider.RegisterDefaults(logFile);
 
+                var DEBUG = true;
+
+                if (DEBUG)
+                {
+                    var _logger = SimpleServiceProvider.Get<ILogger>();
+
+                    _logger.Info("=== DEBUG ARRANCANDO ====");
+                    var runner = new ImportRunner();
+                    await runner.RunAsync();
+                    _logger.Info("=== TERMINO  ====");
+
+                    Environment.Exit(0);
+                    
+                }
+
+
+
+
+                Application oApp = null;
+                if (args.Length < 1)
+                {
+                    oApp = new Application();
+                }
+                else
+                {
+                    //If you want to use an add-on identifier for the development license, you can specify an add-on identifier string as the second parameter.
+                    //oApp = new Application(args[0], "XXXXX");
+                    oApp = new Application(args[0]);
+                }
 
                 Menu MyMenu = new Menu();
                 MyMenu.AddMenuItems();
