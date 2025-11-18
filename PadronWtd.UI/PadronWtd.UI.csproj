@@ -88,6 +88,7 @@
     <Compile Include="SL\PSaltaDto.cs" />
     <Compile Include="SL\SapPSaltaService.cs" />
     <Compile Include="SL\ServiceLayerClient.cs" />
+    <Compile Include="SL\ServiceLayerClientDebug.cs" />
     <Compile Include="SL\ServiceLayerPClient.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>

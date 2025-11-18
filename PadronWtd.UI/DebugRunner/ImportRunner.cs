@@ -1,4 +1,5 @@
-﻿using PadronWtd.UI.DI;
+﻿using PadronWtd.ServiceLayer;
+using PadronWtd.UI.DI;
 using PadronWtd.UI.Forms;   // donde está tu FrmImportarService
 using PadronWtd.UI.Logging;
 using PadronWtd.UI.Services;
@@ -11,7 +12,7 @@ namespace PadronWtd.DebugRunner
     public class ImportRunner
     {
         private readonly ServiceLayerClient _sl;
-        private readonly ServiceLayerPClient _slp;
+        private readonly ServiceLayerClientDebug _slp;
         private readonly FrmImportarService _service;
         private readonly ILogger _logger;
         public ImportRunner()
@@ -19,7 +20,7 @@ namespace PadronWtd.DebugRunner
             _logger = SimpleServiceProvider.Get<ILogger>();
             // No existe _app (SAP) en debug mode, lo reemplazamos por null
             // _sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
-            _slp = new ServiceLayerPClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/", "gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
+            _slp = new ServiceLayerClientDebug("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
 
             // Pasamos null como Application (no se usa para debug)
             _service = new FrmImportarService(app: null, _sl);
@@ -31,12 +32,17 @@ namespace PadronWtd.DebugRunner
             string archivo = @"C:\Users\cvalicenti\source\repos\PadronToWtd\etc\padron.csv";
 
             Console.WriteLine($"Login SL...");
-            var resp = await _slp.LoginAsync();
-            if (!resp)
-            {
-                Console.WriteLine($"NO SE LOGUEO.");
-                Environment.Exit(100);
-            }
+            await _slp.LoginAsync( "gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
+            var items = await _slp.GetAsync("Items?$top=5");
+            // Display en consola los primeros 5 items
+            Console.WriteLine("Items obtenidos:");
+            Console.WriteLine(items);
+
+            //if (!resp)
+            //{
+            //    Console.WriteLine($"NO SE LOGUEO.");
+            //    Environment.Exit(100);
+            //}
             Console.WriteLine($"Login OK.");
 
             Console.WriteLine($"Importando archivo: {archivo}");
