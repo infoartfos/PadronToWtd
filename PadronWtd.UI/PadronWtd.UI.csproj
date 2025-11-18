@@ -72,6 +72,8 @@
     <Compile Include="AppSettings.cs" />
     <Compile Include="DebugRunner\ImportRunner.cs" />
     <Compile Include="DI\SimpleServiceProvider.cs" />
+    <Compile Include="Dto\PSaltaCsvMapper.cs" />
+    <Compile Include="Dto\PSaltaRecord.cs" />
     <Compile Include="Forms\FrmImportar.cs" />
     <Compile Include="Forms\MainForm.cs" />
     <Compile Include="Logging\FileLogger.cs" />
