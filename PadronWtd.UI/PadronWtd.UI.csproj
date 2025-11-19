@@ -82,6 +82,8 @@
     <Compile Include="MenuConstants.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Repository\DI\PSaltaRepository.cs" />
+    <Compile Include="Repository\SL\PSaltaRepository.cs" />
     <Compile Include="Services\FrmImportarService.cs" />
     <Compile Include="Services\IImportService.cs" />
     <Compile Include="SL\HttpDebug.cs" />
