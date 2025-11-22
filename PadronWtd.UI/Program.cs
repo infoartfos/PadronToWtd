@@ -3,7 +3,6 @@ using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 using SAPbouiCOM.Framework;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -39,7 +38,8 @@ namespace PadronWtd.UI
                     var _logger = SimpleServiceProvider.Get<ILogger>();
 
                     _logger.Info("=== DEBUG ARRANCANDO ====");
-                    var runner = new ImportRunner();
+                    // var runner = new ImportRunner();
+                    var runner = new LeerPadronRunner();
                     await runner.RunAsync();
                     _logger.Info("=== TERMINO  ====");
 

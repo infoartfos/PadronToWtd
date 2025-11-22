@@ -47,13 +47,14 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <PlatformTarget>x86</PlatformTarget>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>..\packages\Newtonsoft.Json.13.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
-    <Reference Include="SAPBusinessOneSDK, Version=1.0.0.1, Culture=neutral, PublicKeyToken=c7c3cb60e45d119f, processorArchitecture=MSIL">
-      <HintPath>..\etc\dll\SAPBusinessOneSDK.dll</HintPath>
-    </Reference>
+    <Reference Include="SAPBusinessOneSDK, Version=1.0.0.1, Culture=neutral, PublicKeyToken=c7c3cb60e45d119f, processorArchitecture=MSIL" />
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
@@ -71,7 +72,11 @@
     <Compile Include="AppConstants.cs" />
     <Compile Include="AppSettings.cs" />
     <Compile Include="DebugRunner\ImportRunner.cs" />
+    <Compile Include="DebugRunner\LeerPadronRunner.cs" />
     <Compile Include="DI\SimpleServiceProvider.cs" />
+    <Compile Include="Domain\PSaltaRecord.cs" />
+    <Compile Include="Dto\PSaltaCsvMapper.cs" />
+    <Compile Include="Dto\PSaltaRecordDto.cs" />
     <Compile Include="Forms\FrmImportar.cs" />
     <Compile Include="Forms\MainForm.cs" />
     <Compile Include="Logging\FileLogger.cs" />
@@ -80,8 +85,11 @@
     <Compile Include="MenuConstants.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Repository\DI\PSaltaRepository.cs" />
+    <Compile Include="Repository\SL\PSaltaRepository.cs" />
     <Compile Include="Services\FrmImportarService.cs" />
     <Compile Include="Services\IImportService.cs" />
+    <Compile Include="Services\PadronService.cs" />
     <Compile Include="SL\HttpDebug.cs" />
     <Compile Include="SL\PSaltaDto.cs" />
     <Compile Include="SL\SapPSaltaService.cs" />
@@ -123,6 +131,5 @@
       <Install>false</Install>
     </BootstrapperPackage>
   </ItemGroup>
-  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
