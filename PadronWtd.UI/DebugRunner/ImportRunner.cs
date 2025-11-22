@@ -32,18 +32,18 @@ namespace PadronWtd.DebugRunner
             string archivo = @"C:\Users\cvalicenti\source\repos\PadronToWtd\etc\padron.csv";
 
             Console.WriteLine($"Login SL...");
-            await _slp.LoginAsync( "gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
-            var items = await _slp.GetAsync("Items?$top=5");
-            // Display en consola los primeros 5 items
-            Console.WriteLine("Items obtenidos:");
-            Console.WriteLine(items);
+            //await _slp.LoginAsync( "gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
+            //var items = await _slp.GetAsync("Items?$top=5");
+            //// Display en consola los primeros 5 items
+            //Console.WriteLine("Items obtenidos:");
+            //Console.WriteLine(items);
 
             //if (!resp)
             //{
             //    Console.WriteLine($"NO SE LOGUEO.");
             //    Environment.Exit(100);
             //}
-            Console.WriteLine($"Login OK.");
+            //Console.WriteLine($"Login OK.");
 
             Console.WriteLine($"Importando archivo: {archivo}");
             object value = await _service.ImportarAsync(archivo, msg => Console.WriteLine(msg));
