@@ -13,7 +13,6 @@ namespace PadronWtd.DebugRunner
     public class ImportRunner
     {
         private readonly ServiceLayerClient _sl;
-        private readonly ServiceLayerClientDebug _slp;
         private readonly FrmImportarService _service;
         private readonly ILogger _logger;
         public ImportRunner()
@@ -21,7 +20,7 @@ namespace PadronWtd.DebugRunner
             _logger = SimpleServiceProvider.Get<ILogger>();
             // No existe _app (SAP) en debug mode, lo reemplazamos por null
             // _sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
-            _slp = new ServiceLayerClientDebug("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
+            _sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
 
             // Pasamos null como Application (no se usa para debug)
             _service = new FrmImportarService(app: null, _sl);
@@ -30,7 +29,7 @@ namespace PadronWtd.DebugRunner
 
         public async Task RunAsync()
         {
-            var sl = new ServiceLayerClientDebug("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1");
+            var sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1");
 
             await sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
 

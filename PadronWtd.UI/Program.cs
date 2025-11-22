@@ -12,7 +12,7 @@ namespace PadronWtd.UI
     {
 
         [STAThread]
-        static async Task Main(string[] args)
+        static void Main(string[] args)
         {
             try
             {
@@ -40,15 +40,12 @@ namespace PadronWtd.UI
                     _logger.Info("=== DEBUG ARRANCANDO ====");
                     // var runner = new ImportRunner();
                     var runner = new LeerPadronRunner();
-                    await runner.RunAsync();
+                    runner.Run();
                     _logger.Info("=== TERMINO  ====");
 
                     Environment.Exit(0);
-                    
+
                 }
-
-
-
 
                 Application oApp = null;
                 if (args.Length < 1)
@@ -57,8 +54,6 @@ namespace PadronWtd.UI
                 }
                 else
                 {
-                    //If you want to use an add-on identifier for the development license, you can specify an add-on identifier string as the second parameter.
-                    //oApp = new Application(args[0], "XXXXX");
                     oApp = new Application(args[0]);
                 }
 

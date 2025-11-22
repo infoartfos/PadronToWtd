@@ -237,7 +237,7 @@ namespace PadronWtd.UI.Forms
                 //using (var sl = new ServiceLayerClient(SL_BASE_URL, SL_USER, SL_PASS, SL_COMPANY, _logger))
                 //using (var sl = new ServiceLayerClient())
         
-                var sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
+                var sl = new ServiceLayerClientOriginalBorrar("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
                 {
                     try
                     {

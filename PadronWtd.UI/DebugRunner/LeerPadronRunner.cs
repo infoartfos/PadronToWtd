@@ -20,7 +20,7 @@ namespace PadronWtd.DebugRunner
 
         }
 
-        public async Task RunAsync()
+        public void Run()
         {
             Company oCompany = null;
 
@@ -57,7 +57,7 @@ namespace PadronWtd.DebugRunner
                 {
                     string errorMsg = oCompany.GetLastErrorDescription();
                     Console.WriteLine($"ERROR DE CONEXIÓN ({returnCode}): {errorMsg}");
-                    return; 
+                    return;
                 }
 
                 Console.WriteLine($"Conectando a: {oCompany.Server} | SLD: {oCompany.SLDServer}...");

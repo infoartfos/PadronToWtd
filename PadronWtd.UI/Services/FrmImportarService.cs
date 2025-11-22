@@ -43,10 +43,7 @@ namespace PadronWtd.UI.Services
 
             log("Iniciando login contra Service Layer...");
 
-            var okLogin = await _sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
-
-            if (!okLogin)
-                throw new Exception("No se pudo iniciar sesión en Service Layer");
+            await _sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
 
             log("Login OK.");
 
