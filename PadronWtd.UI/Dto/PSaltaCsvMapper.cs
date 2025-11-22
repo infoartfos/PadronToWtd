@@ -11,9 +11,9 @@ public static class PSaltaCsvMapper
         "U_Anio","U_Padron","U_Cuit","U_Inscripcion","U_Riesgo","U_Notas","U_Procesado"
     };
 
-    public static List<PSaltaRecord> ReadCsv(string path)
+    public static List<PSaltaRecordDto> ReadCsv(string path)
     {
-        var list = new List<PSaltaRecord>();
+        var list = new List<PSaltaRecordDto>();
         var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         using (var reader = new StreamReader(path))
         {
@@ -26,7 +26,7 @@ public static class PSaltaCsvMapper
 
                 var cols = line.Split('\t');
                 
-                var r = new PSaltaRecord
+                var r = new PSaltaRecordDto
                 {
                     
                     Code = "",
@@ -58,7 +58,7 @@ public static class PSaltaCsvMapper
         return list;
     }
 
-    public static void WriteCsv(string path, IEnumerable<PSaltaRecord> records)
+    public static void WriteCsv(string path, IEnumerable<PSaltaRecordDto> records)
     {
         using (var writer = new StreamWriter(path, false))
         {

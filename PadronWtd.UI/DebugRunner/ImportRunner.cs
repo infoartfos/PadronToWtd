@@ -1,4 +1,5 @@
-﻿using PadronWtd.ServiceLayer;
+﻿using PadronWdt.Repository.SL;
+using PadronWtd.ServiceLayer;
 using PadronWtd.UI.DI;
 using PadronWtd.UI.Forms;   // donde está tu FrmImportarService
 using PadronWtd.UI.Logging;

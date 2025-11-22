@@ -1,6 +1,6 @@
 ﻿using System;
 
-public class PSaltaRecord
+public class PSaltaRecordDto
 {
     public string Code { get; set; }
     public string Name { get; set; }

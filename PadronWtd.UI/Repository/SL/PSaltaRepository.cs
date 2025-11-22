@@ -3,70 +3,72 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-public class PSaltaRepository
-{
-    private readonly ServiceLayerClientDebug _sl;
-
-    public PSaltaRepository(ServiceLayerClientDebug sl)
+namespace PadronWdt.Repository.SL { 
+    public class PSaltaRepository
     {
-        _sl = sl;
-    }
+        private readonly ServiceLayerClientDebug _sl;
 
-    // -----------------------------------------------------------------------
-    // GET /P_Salta
-    // -----------------------------------------------------------------------
-    public async Task<List<PSaltaRecord>> GetAllAsync()
-    {
-        string json = await _sl.GetAsync("P_Salta");
+        public PSaltaRepository(ServiceLayerClientDebug sl)
+        {
+            _sl = sl;
+        }
 
-        var wrapper = JsonConvert.DeserializeObject<PSaltaWrapper>(json);
+        // -----------------------------------------------------------------------
+        // GET /P_Salta
+        // -----------------------------------------------------------------------
+        public async Task<List<PSaltaRecordDto>> GetAllAsync()
+        {
+            string json = await _sl.GetAsync("P_Salta");
 
-        return wrapper.value;
-    }
+            var wrapper = JsonConvert.DeserializeObject<PSaltaWrapper>(json);
 
-    // -----------------------------------------------------------------------
-    // POST /P_Salta
-    // -----------------------------------------------------------------------
-    public async Task<string> CreateAsync(PSaltaRecord r)
-    {
-        r.Code = await this.GetNextCodeAsync();
+            return wrapper.value;
+        }
 
-        return await _sl.PostAsync("P_Salta", r);
-    }
+        // -----------------------------------------------------------------------
+        // POST /P_Salta
+        // -----------------------------------------------------------------------
+        public async Task<string> CreateAsync(PSaltaRecordDto r)
+        {
+            r.Code = await this.GetNextCodeAsync();
 
-    // -----------------------------------------------------------------------
-    // PUT /P_Salta('Code')
-    // -----------------------------------------------------------------------
-    public Task<string> UpdateAsync(PSaltaRecord r)
-    {
-        return _sl.PutAsync($"P_Salta('{r.Code}')", r);
-    }
+            return await _sl.PostAsync("P_Salta", r);
+        }
 
-    // -----------------------------------------------------------------------
-    // Para deserializar los GET
-    // -----------------------------------------------------------------------
-    private class PSaltaWrapper
-    {
-        public List<PSaltaRecord> value { get; set; }
-    }
+        // -----------------------------------------------------------------------
+        // PUT /P_Salta('Code')
+        // -----------------------------------------------------------------------
+        public Task<string> UpdateAsync(PSaltaRecordDto r)
+        {
+            return _sl.PutAsync($"P_Salta('{r.Code}')", r);
+        }
 
-    // -----------------------------------------------------------------------
-    // Obtiene el próximo CODE incremental
-    // -----------------------------------------------------------------------
-    private async Task<string> GetNextCodeAsync()
-    {
-        // GET ordenando desc para obtener el último
-        string json = await _sl.GetAsync("P_Salta?$select=Code&$orderby=Code desc&$top=1");
+        // -----------------------------------------------------------------------
+        // Para deserializar los GET
+        // -----------------------------------------------------------------------
+        private class PSaltaWrapper
+        {
+            public List<PSaltaRecordDto> value { get; set; }
+        }
 
-        var wrapper = JsonConvert.DeserializeObject<PSaltaWrapper>(json);
+        // -----------------------------------------------------------------------
+        // Obtiene el próximo CODE incremental
+        // -----------------------------------------------------------------------
+        private async Task<string> GetNextCodeAsync()
+        {
+            // GET ordenando desc para obtener el último
+            string json = await _sl.GetAsync("P_Salta?$select=Code&$orderby=Code desc&$top=1");
 
-        string lastCode = "0";
+            var wrapper = JsonConvert.DeserializeObject<PSaltaWrapper>(json);
 
-        if (wrapper.value != null && wrapper.value.Count > 0)
-            lastCode = wrapper.value[0].Code;
+            string lastCode = "0";
 
-        int next = int.Parse(lastCode) + 1;
+            if (wrapper.value != null && wrapper.value.Count > 0)
+                lastCode = wrapper.value[0].Code;
 
-        return next.ToString();
+            int next = int.Parse(lastCode) + 1;
+
+            return next.ToString();
+        }
     }
 }
