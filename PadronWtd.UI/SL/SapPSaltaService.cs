@@ -5,9 +5,9 @@ namespace PadronWtd.UI.SL
 {
     public class SapPSaltaService
     {
-        private readonly ServiceLayerClientOriginalBorrar _client;
+        private ServiceLayerClient _client;
 
-        public SapPSaltaService(ServiceLayerClientOriginalBorrar client)
+        public SapPSaltaService(ServiceLayerClient client)
         {
             _client = client;
         }

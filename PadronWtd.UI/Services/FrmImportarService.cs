@@ -1,4 +1,5 @@
-﻿using PadronWtd.UI.Logging;
+﻿using PadronWtd.UI.DI;
+using PadronWtd.UI.Logging;
 using PadronWtd.UI.SL;
 using SAPbouiCOM;
 using System;
@@ -20,23 +21,19 @@ namespace PadronWtd.UI.Services
     }
     internal class FrmImportarService : IImportService
     {
-        private readonly ILogger _logger = null;
+        private readonly ILogger _logger = SimpleServiceProvider.Get<ILogger>();
         private readonly int _batchSize = 100;
         private readonly ServiceLayerClient _sl;
 
         private Application _app;  // puede ser null en debug
 
-        public FrmImportarService(Application app, ServiceLayerClient s1)
+        public FrmImportarService(SAPbouiCOM.Application app, ServiceLayerClient s1)
         {
             _app = app;
             _sl = s1;
         }
 
 
-        //public FrmImportarService()
-        //{
-        //    _sl = new ServiceLayerClient();
-        //}
 
         public async Task<ImportResult> ImportarAsync(string csvPath, Action<string> log)
         {

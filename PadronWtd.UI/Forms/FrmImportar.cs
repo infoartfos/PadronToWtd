@@ -27,13 +27,18 @@ namespace PadronWtd.UI.Forms
         private StaticText lblProgress;
         private readonly IImportService _importService;
         private readonly ILogger _logger;
+        private readonly ServiceLayerClient _sl;
         private CancellationTokenSource _cts;
+        private string q_value = "Q8";
+        private string year = string.Empty;
 
         public FrmImportar(SAPbouiCOM.Application application)
         {
             SBO_Application = application;
             _logger = SimpleServiceProvider.Get<ILogger>();
-            _importService = SimpleServiceProvider.Get<IImportService>();
+
+            _sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
+            _importService = new FrmImportarService(application, _sl);
         }
 
         public void CreateForm()
@@ -59,10 +64,10 @@ namespace PadronWtd.UI.Forms
             top += spacing;
             AddLabel("lblPeriodo", "Período a Procesar:", left, top);
             cmbPeriodo = AddComboBox("cmbPeriodo", left + lblWidth, top, fieldWidth);
-            cmbPeriodo.ValidValues.Add("1", "Ejecución 1 - Primer Trimestre");
-            cmbPeriodo.ValidValues.Add("2", "Ejecución 2 - Segundo Trimestre");
-            cmbPeriodo.ValidValues.Add("3", "Ejecución 3 - Tercer Trimestre");
-            cmbPeriodo.ValidValues.Add("4", "Ejecución 4 - Cuarto Trimestre");
+            cmbPeriodo.ValidValues.Add("1", "Q1 2025");
+            cmbPeriodo.ValidValues.Add("2", "Q2 2025");
+            cmbPeriodo.ValidValues.Add("3", "Q3 2025");
+            cmbPeriodo.ValidValues.Add("4", "Q4 2025");
             cmbPeriodo.Select("1", BoSearchKey.psk_ByValue);
 
             top += spacing;
@@ -96,7 +101,8 @@ namespace PadronWtd.UI.Forms
 
             if (FormUID != "FrmImp" || !pVal.BeforeAction)
                 return;
-
+            q_value = "Q1";
+            year = "2025";
             if (pVal.EventType == BoEventTypes.et_ITEM_PRESSED && pVal.ItemUID == "btnImport")
             {
                 BubbleEvent = false;
@@ -237,7 +243,7 @@ namespace PadronWtd.UI.Forms
                 //using (var sl = new ServiceLayerClient(SL_BASE_URL, SL_USER, SL_PASS, SL_COMPANY, _logger))
                 //using (var sl = new ServiceLayerClient())
         
-                var sl = new ServiceLayerClientOriginalBorrar("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
+                var sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
                 {
                     try
                     {
@@ -267,18 +273,22 @@ namespace PadronWtd.UI.Forms
 
                             // parsear columnas (adaptar separador)
                             var cols = line.Split('\t');
+                            if (cols[0].Trim() == "CUIT") continue;
+
+                            var tmp_Inscripcion = cols.Length > 3 ? cols[3].Trim() : "";
+                            var tmp_Riesgo = cols.Length > 2 ? cols[2].Trim() : "";
 
                             var dto = new PSaltaDto
                             {
-                                Code = cols.Length > 0 ? cols[0].Trim() : "",
-                                Name = cols.Length > 1 ? cols[1].Trim() : "",
-                                U_Anio = cols.Length > 2 ? cols[2].Trim() : "",
-                                U_Padron = cols.Length > 3 ? cols[3].Trim() : "",
-                                U_Cuit = cols.Length > 4 ? cols[4].Trim() : (cols.Length > 0 ? cols[0].Trim() : ""),
-                                U_Inscripcion = cols.Length > 5 ? cols[5].Trim() : "--",
-                                U_Riesgo = cols.Length > 6 ? cols[6].Trim() : "--",
-                                U_Notas = null,
-                                U_Procesado = null
+                                Code = SequentialId.Generate(), // Guid.NewGuid().ToString("N"),
+                                Name = q_value,
+                                U_Anio = year.Length > 0 ?  year : "--",
+                                U_Padron = line.Length > 0 ? line : "--",
+                                U_Cuit = cols.Length > 1 ? cols[0].Trim() : "",
+                                U_Inscripcion = tmp_Inscripcion,
+                                U_Riesgo = tmp_Riesgo,
+                                U_Notas = "",
+                                U_Procesado = ""
                             };
 
                             try

@@ -1,21 +1,25 @@
-﻿using SAPbobsCOM;
+﻿using PadronWtd.Domain;
+using PadronWtd.UI.DI;
+using PadronWtd.UI.Logging;
+using SAPbobsCOM;
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using PadronWtd.Domain;
+using System.Threading.Tasks;
 
 namespace PadronWtd.Repository.DI
 {
     public class PSaltaRepository
     {
+        private readonly ILogger _logger;
         private readonly Company _company;
-        private const string TABLE_NAME = "P_SALTA"; // Nombre sin arroba para el objeto UserTable
-        private const string DB_TABLE_NAME = "@P_SALTA"; // Nombre con arroba para SQL
+        private const string TABLE_NAME = "PADRON_SALTA_IMP";
+        private const string DB_TABLE_NAME = "@PADRON_SALTA_IMP";
 
         public PSaltaRepository(Company company)
         {
+            _logger = SimpleServiceProvider.Get<ILogger>();
             _company = company ?? throw new ArgumentNullException(nameof(company));
             if (!_company.Connected)
                 throw new InvalidOperationException("La conexión a SAP Business One no está activa.");
@@ -71,10 +75,10 @@ namespace PadronWtd.Repository.DI
 
                         // Manejo seguro de fechas
                         var createDateVal = recordset.Fields.Item("CreateDate").Value;
-                        if (createDateVal != null && createDateVal is DateTime dt)
-                        {
-                            rec.CreateDate = dt;
-                        }
+                        //if (createDateVal != null && createDateVal is DateTime dt)
+                        //{
+                        //    rec.CreateDate = dt;
+                        //}
 
                         records.Add(rec);
                         recordset.MoveNext();
@@ -248,10 +252,8 @@ namespace PadronWtd.Repository.DI
                 return defValue;
             }
         }
-        // -----------------------------------------------------------------------
-        // GET BY ANIO: Obtiene registros filtrados por el campo U_Anio
-        // -----------------------------------------------------------------------
-        public async Task<List<PSaltaRecord>> GetByAnioAsync(string anio)
+        
+        public async Task<List<PSaltaRecord>> GetByAnioAsync(string q_value, string anio)
         {
             return await Task.Run(() =>
             {
@@ -261,9 +263,6 @@ namespace PadronWtd.Repository.DI
                 try
                 {
                     recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-
-                    // CUIDADO: Sanitizar 'anio' si viniera de un input de usuario libre para evitar SQL Injection básico.
-                    // Aquí asumimos que 'anio' es seguro (ej. "2025").
                     string query = $@"
                 SELECT 
                     ""Code"", ""Name"", ""DocEntry"", ""Canceled"", ""Object"", 
@@ -272,13 +271,13 @@ namespace PadronWtd.Repository.DI
                     ""U_Riesgo"", ""U_Notas"", ""U_Procesado"", ""U_Estado""
                 FROM ""{DB_TABLE_NAME}"" 
                 WHERE ""U_Anio"" = '{anio}'
+                AND  ""Name"" = '{q_value}'
                 ORDER BY CAST(""Code"" AS INT) ASC";
 
                     recordset.DoQuery(query);
 
                     while (!recordset.EoF)
                     {
-                        // Reutilizamos la lógica de mapeo (idealmente podrías extraer esto a un método privado 'MapRecord')
                         var rec = new PSaltaRecord
                         {
                             Code = GetValue(recordset, "Code"),
@@ -298,15 +297,13 @@ namespace PadronWtd.Repository.DI
                         };
 
                         var createDateVal = recordset.Fields.Item("CreateDate").Value;
-                        if (createDateVal != null && createDateVal is DateTime dt)
-                            rec.CreateDate = dt;
-
                         records.Add(rec);
                         recordset.MoveNext();
                     }
                 }
                 catch (Exception ex)
                 {
+                    _logger.Error($"Error en GetByAnioAsync: {ex.Message}{ex.StackTrace}");
                     Debug.WriteLine($"Error en GetByAnioAsync: {ex.Message}");
                     throw;
                 }
@@ -318,5 +315,154 @@ namespace PadronWtd.Repository.DI
                 return records;
             });
         }
-    }
+
+
+        public async Task<bool> ExistsByAnioAndQAsync(string q_value, string anio)
+        {
+            return await Task.Run(() =>
+            {
+                Recordset recordset = null;
+                try
+                {
+                    recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                    string query = $@"
+                        SELECT TOP 1 ""Code"" 
+                        FROM ""{DB_TABLE_NAME}"" 
+                        WHERE ""U_Anio"" = '{anio}' 
+                        AND ""Name"" = '{q_value}'";
+
+                    recordset.DoQuery(query);
+
+                    return !recordset.EoF;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error en ExistsByAnioAndQAsync: {ex.Message}");
+                    throw;
+                }
+                finally
+                {
+                    if (recordset != null) Marshal.ReleaseComObject(recordset);
+                }
+            });
+        }
+
+        //public async Task DeleteByAnioAndQSqlAsync(string q_value, string anio)
+        //{
+        //    await Task.Run(() =>
+        //    {
+        //        Recordset recordset = null;
+        //        try
+        //        {
+        //            recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+        //            string query = $@"DELETE FROM ""{DB_TABLE_NAME}"" WHERE ""U_Anio"" = '{anio}' AND ""Name"" = '{q_value}'";
+        //            recordset.DoQuery(query);
+        //        }
+        //        finally
+        //        {
+        //            if (recordset != null) Marshal.ReleaseComObject(recordset);
+        //        }
+        //    });
+        //}
+        // -----------------------------------------------------------------------
+        // DELETE BATCH: Borra todos los registros de un Q y Año específicos
+        // -----------------------------------------------------------------------
+        public async Task DeleteByAnioAndQAsync(string q_value, string anio)
+        {
+            await Task.Run(() =>
+            {
+                Recordset recordset = null;
+                UserTable userTable = null;
+
+                try
+                {
+                    recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                    string query = $@"
+                        SELECT ""Code"" 
+                        FROM ""{DB_TABLE_NAME}"" 
+                        WHERE ""U_Anio"" = '{anio}' 
+                        AND ""Name"" = '{q_value}'";
+
+                    recordset.DoQuery(query);
+
+                    if (recordset.EoF) return; // No hay nada que borrar
+
+                    userTable = _company.UserTables.Item(TABLE_NAME);
+
+                    recordset.MoveFirst();
+
+                    while (!recordset.EoF)
+                    {
+                        string codeToDelete = recordset.Fields.Item("Code").Value.ToString();
+                        if (userTable.GetByKey(codeToDelete))
+                        {
+                            int result = userTable.Remove();
+                            if (result != 0)
+                            {
+                                string errorMsg = _company.GetLastErrorDescription();
+                                _logger.Error($"Error al borrar registro Code {codeToDelete}: {errorMsg}");
+                                // Opcional: throw new Exception(...) si quieres detener todo el proceso
+                            }
+                        }
+
+                        recordset.MoveNext();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error en DeleteByAnioAndQAsync: {ex.Message}");
+                    throw;
+                }
+                finally
+                {
+                    if (recordset != null) Marshal.ReleaseComObject(recordset);
+                    if (userTable != null) Marshal.ReleaseComObject(userTable);
+                }
+            });
+        }
+
+
+        public void ExecuteSpInsertWtd3(Company company, int entry, int linea, int wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
+            {
+                Recordset oRecordset = null;
+                try
+                {
+                    oRecordset = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                    string fDesde = desde.ToString("yyyyMMdd");
+                    string fHasta = hasta.ToString("yyyyMMdd");
+
+                    string query = $@"
+                    CALL ""SBP_SIOC_CHAR"".""SP_INSERT_WTD3"" (
+                        {entry}, 
+                        {linea}, 
+                        {wddCode}, 
+                        '{cuit}', 
+                        '{fDesde}', 
+                        '{fHasta}', 
+                        '{part2}', 
+                        '{detType}'
+                    )";
+
+                    oRecordset.DoQuery(query);
+
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Error al ejecutar SP_INSERT_WTD3: {ex.Message}");
+                }
+                finally
+                {
+                    if (oRecordset != null)
+                    {
+                        Marshal.ReleaseComObject(oRecordset);
+                        oRecordset = null;
+                    }
+                }
+            }
+
+
+}
 }

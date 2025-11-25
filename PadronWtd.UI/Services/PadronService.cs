@@ -1,4 +1,5 @@
 ﻿using SAPbobsCOM;
+// using SAPbouiCOM;
 using System;
 using System.Threading.Tasks;
 using System.Windows.Forms; // Si usas WinForms o SAP Forms
@@ -26,7 +27,7 @@ namespace PadronWtd.UI.Services
                 Console.WriteLine("Iniciando búsqueda de registros del 2025...");
 
                 // 2. Llamar al método asíncrono filtrando por año
-                var listaResultados = await repository.GetByAnioAsync("2025");
+                var listaResultados = await repository.GetByAnioAsync("Q1", "2025");
 
                 if (listaResultados.Count == 0)
                 {

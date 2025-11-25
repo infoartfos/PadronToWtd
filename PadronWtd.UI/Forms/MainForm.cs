@@ -1,5 +1,8 @@
-﻿using PadronWtd.UI.Configuration;
+﻿using PadronWtd.DebugRunner;
+using PadronWtd.UI.Configuration;
 using PadronWtd.UI.Constants;
+using PadronWtd.UI.DI;
+using PadronWtd.UI.Logging;
 using SAPbouiCOM;
 using System;
 // using PadronWtd.Application.Services;
@@ -46,7 +49,7 @@ namespace PadronWtd.UI.Forms
             ((StaticText)label.Specific).Caption = "Opciones:";
 
             AddButton("btnFecha", "Mantenimiento de Fecha", 70);
-            AddButton("btnImp", "Mantenimiento de Impuestos", 110);
+            AddButton("btnImp",   "Mantenimiento de Impuestos", 110);
             AddButton("btnProc", "Importar y procesar", 150);
 
             _app.ItemEvent += App_ItemEvent;
@@ -83,6 +86,14 @@ namespace PadronWtd.UI.Forms
 
         private void OnImportarClick()
         {
+            var _logger = SimpleServiceProvider.Get<ILogger>();
+
+            //_logger.Info("=== DEBUG ARRANCANDO ====");
+            //// var runner = new ImportRunner();
+            //var runner = new LeerPadronRunnerAddOn();
+            //runner.Run();
+            //_logger.Info("=== TERMINO  ====");
+
             var frmImportar = new FrmImportar(_app);
             frmImportar.CreateForm();
         }

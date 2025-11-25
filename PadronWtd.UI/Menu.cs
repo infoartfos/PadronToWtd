@@ -1,6 +1,6 @@
 ﻿using PadronWtd.UI.Constants;
 using PadronWtd.UI.Forms;
-using SAPbouiCOM.Framework;
+using SAPbouiCOM;
 using System;
 
 namespace PadronWtd.UI
@@ -9,7 +9,7 @@ namespace PadronWtd.UI
     {
         public void AddMenuItems()
         {
-            var oApp = Application.SBO_Application;
+            var oApp = App.SBO_Application;
             SAPbouiCOM.Menus oMenus = oApp.Menus;
             SAPbouiCOM.MenuItem oMenuItem;
 
@@ -67,12 +67,12 @@ namespace PadronWtd.UI
             {
                 if (pVal.BeforeAction && pVal.MenuUID == MenuConstants.MenuPadronSaltaId)
                 {
-                    var form = new MainForm(Application.SBO_Application);
+                    var form = new MainForm(App.SBO_Application);
                 }
             }
             catch (Exception ex)
             {
-                Application.SBO_Application.MessageBox(
+                App.SBO_Application.MessageBox(
                     AppConstants.ErrorUnexpected + "\n" + ex.Message,
                     1, "OK"
                 );
