@@ -31,9 +31,19 @@ namespace PadronWtd.DebugRunner
         {
             var sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1");
 
-            await sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
+            Console.WriteLine($"Login SL...");
+            //await _slp.LoginAsync( "gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
+            //var items = await _slp.GetAsync("Items?$top=5");
+            //// Display en consola los primeros 5 items
+            //Console.WriteLine("Items obtenidos:");
+            //Console.WriteLine(items);
 
-            var repo = new PSaltaRepository(sl);
+            //if (!resp)
+            //{
+            //    Console.WriteLine($"NO SE LOGUEO.");
+            //    Environment.Exit(100);
+            //}
+            //Console.WriteLine($"Login OK.");
 
             // ============================================================
             // 1) LEER CSV
