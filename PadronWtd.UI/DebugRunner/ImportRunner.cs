@@ -13,7 +13,6 @@ namespace PadronWtd.DebugRunner
     public class ImportRunner
     {
         private readonly ServiceLayerClient _sl;
-        private readonly ServiceLayerClientDebug _slp;
         private readonly FrmImportarService _service;
         private readonly ILogger _logger;
         public ImportRunner()
@@ -21,7 +20,7 @@ namespace PadronWtd.DebugRunner
             _logger = SimpleServiceProvider.Get<ILogger>();
             // No existe _app (SAP) en debug mode, lo reemplazamos por null
             // _sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
-            _slp = new ServiceLayerClientDebug("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
+            _sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1/");
 
             // Pasamos null como Application (no se usa para debug)
             _service = new FrmImportarService(app: null, _sl);
@@ -32,19 +31,9 @@ namespace PadronWtd.DebugRunner
         {
             var sl = new ServiceLayerClientDebug("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1");
 
-            Console.WriteLine($"Login SL...");
-            //await _slp.LoginAsync( "gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
-            //var items = await _slp.GetAsync("Items?$top=5");
-            //// Display en consola los primeros 5 items
-            //Console.WriteLine("Items obtenidos:");
-            //Console.WriteLine(items);
+            await sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
 
-            //if (!resp)
-            //{
-            //    Console.WriteLine($"NO SE LOGUEO.");
-            //    Environment.Exit(100);
-            //}
-            //Console.WriteLine($"Login OK.");
+            var repo = new PSaltaRepository(sl);
 
             // ============================================================
             // 1) LEER CSV

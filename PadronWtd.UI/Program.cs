@@ -12,7 +12,7 @@ namespace PadronWtd.UI
     {
 
         [STAThread]
-        static async Task Main(string[] args)
+        static void Main(string[] args)
         {
             try
             {
@@ -40,11 +40,11 @@ namespace PadronWtd.UI
                     _logger.Info("=== DEBUG ARRANCANDO ====");
                     // var runner = new ImportRunner();
                     var runner = new LeerPadronRunner();
-                    await runner.RunAsync();
+                    runner.Run();
                     _logger.Info("=== TERMINO  ====");
 
                     Environment.Exit(0);
-                    
+
                 }
 
 

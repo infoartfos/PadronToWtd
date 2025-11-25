@@ -20,8 +20,8 @@ namespace PadronWtd.UI.Services
     }
     internal class FrmImportarService : IImportService
     {
-        private readonly ILogger _logger;
-        private readonly int _batchSize;
+        private readonly ILogger _logger = null;
+        private readonly int _batchSize = 100;
         private readonly ServiceLayerClient _sl;
 
         private Application _app;  // puede ser null en debug
