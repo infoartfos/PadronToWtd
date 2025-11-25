@@ -50,16 +50,17 @@ namespace PadronWtd.DebugRunner
                 oCompany.language = BoSuppLangs.ln_Spanish_La;
 
                 Console.WriteLine("Conectando a SAP Business One...");
-
+                _logger.Info("Conectando a SAP Business One...");
                 int returnCode = oCompany.Connect();
 
                 if (returnCode != 0)
                 {
                     string errorMsg = oCompany.GetLastErrorDescription();
+                    _logger.Info($"ERROR DE CONEXIÓN ({returnCode}): {errorMsg}");
                     Console.WriteLine($"ERROR DE CONEXIÓN ({returnCode}): {errorMsg}");
                     return;
                 }
-
+                _logger.Info($"Conectando a: {oCompany.Server} | SLD: {oCompany.SLDServer}...");
                 Console.WriteLine($"Conectando a: {oCompany.Server} | SLD: {oCompany.SLDServer}...");
 
                 RunAppAsync(oCompany).GetAwaiter().GetResult();
@@ -67,6 +68,7 @@ namespace PadronWtd.DebugRunner
             }
             catch (Exception ex)
             {
+                _logger.Error($"Excepción Crítica: {ex.Message}");
                 Console.WriteLine($"Excepción Crítica: {ex.Message}");
             }
             finally
@@ -85,6 +87,7 @@ namespace PadronWtd.DebugRunner
                 }
             }
 
+            _logger.Info("TERMINO");
             Console.WriteLine("Presione ENTER para salir...");
             Console.ReadLine();
         }
@@ -94,6 +97,8 @@ namespace PadronWtd.DebugRunner
         /// </summary>
         private static async Task RunAppAsync(Company company)
         {
+            var log = SimpleServiceProvider.Get<ILogger>();
+            log.Info("Iniciando servicio de Padrón...");
             Console.WriteLine("Iniciando servicio de Padrón...");
 
             // Instanciamos el servicio pasando la compañía conectada
@@ -101,7 +106,7 @@ namespace PadronWtd.DebugRunner
 
             // Llamamos al método que creamos en el paso anterior
             await padronService.ProcesarPadron2025();
-
+            log.Info("Servicio finalizado");
             Console.WriteLine("Servicio finalizado.");
         }
     }
