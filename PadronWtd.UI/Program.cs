@@ -47,9 +47,6 @@ namespace PadronWtd.UI
 
                 }
 
-
-
-
                 Application oApp = null;
                 if (args.Length < 1)
                 {
@@ -57,8 +54,6 @@ namespace PadronWtd.UI
                 }
                 else
                 {
-                    //If you want to use an add-on identifier for the development license, you can specify an add-on identifier string as the second parameter.
-                    //oApp = new Application(args[0], "XXXXX");
                     oApp = new Application(args[0]);
                 }
 

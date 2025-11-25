@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 namespace PadronWdt.Repository.SL { 
     public class PSaltaRepository
     {
-        private readonly ServiceLayerClientDebug _sl;
+        private readonly ServiceLayerClient _sl;
 
-        public PSaltaRepository(ServiceLayerClientDebug sl)
+        public PSaltaRepository(ServiceLayerClient sl)
         {
             _sl = sl;
         }

@@ -29,7 +29,7 @@ namespace PadronWtd.DebugRunner
 
         public async Task RunAsync()
         {
-            var sl = new ServiceLayerClientDebug("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1");
+            var sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1");
 
             await sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
 

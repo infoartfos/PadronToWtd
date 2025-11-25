@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace PadronWtd.ServiceLayer
 {
-    public class ServiceLayerPClient : IDisposable
+    public class ServiceLayerPClientBorrar : IDisposable
     {
         private readonly HttpClient _http;
         private readonly CookieContainer _cookies;
@@ -17,7 +17,7 @@ namespace PadronWtd.ServiceLayer
         private string _sessionId;
         private DateTime _sessionExpires;
 
-        public ServiceLayerPClient(string baseUrl)
+        public ServiceLayerPClientBorrar(string baseUrl)
         {
             _baseUrl = baseUrl.TrimEnd('/');
 
