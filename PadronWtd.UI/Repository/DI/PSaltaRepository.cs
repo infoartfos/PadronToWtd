@@ -5,7 +5,9 @@ using SAPbobsCOM;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace PadronWtd.Repository.DI
@@ -423,6 +425,139 @@ namespace PadronWtd.Repository.DI
             });
         }
 
+
+        public async Task BulkInsertAsync(List<PSaltaRecord> records)
+        {
+            await Task.Run(() =>
+            {
+                Recordset oRS = null;
+                try
+                {
+                    oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                    // Bajamos el tamaño del lote a 200 para evitar errores de complejidad en HANA
+                    int batchSize = 200;
+                    int totalRecords = records.Count;
+                    int processed = 0;
+
+                    // 1. Obtener el DocEntry inicial UNA SOLA VEZ al principio (o por lote si hay concurrencia)
+                    // Para ser más seguros ante concurrencia, lo ideal es obtenerlo justo antes de cada insert,
+                    // pero para imports masivos únicos, tomarlo al inicio y sumar en memoria es mucho más rápido.
+                    int currentDocEntryBase = GetNextDocEntry();
+
+                    while (processed < totalRecords)
+                    {
+                        var batch = records.Skip(processed).Take(batchSize).ToList();
+
+                        if (batch.Any())
+                        {
+                            // Pasamos el ID base para que el método asigne IDs consecutivos
+                            string sql = BuildHanaInsertBatch(batch, currentDocEntryBase);
+                            _logger.Info("SQL: " + sql);
+                            oRS.DoQuery(sql);
+
+                            // Actualizamos la base para el siguiente lote
+                            currentDocEntryBase += batch.Count;
+                        }
+
+                        processed += batchSize;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error en BulkInsert: {ex.Message}");
+                    throw;
+                }
+                finally
+                {
+                    if (oRS != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(oRS);
+                }
+            });
+        }
+
+        private string BuildHanaInsertBatch(List<PSaltaRecord> batch, int startDocEntry)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            sb.Append("INSERT INTO \"@PADRON_SALTA_IMP\" ");
+            sb.Append("(\"DocEntry\", \"Code\", \"Name\", \"DataSource\", \"UserSign\", \"Object\", \"CreateDate\", \"Canceled\", ");
+            sb.Append("\"U_Anio\", \"U_Padron\", \"U_Cuit\", \"U_Inscripcion\", \"U_Riesgo\", \"U_Estado\", \"U_Notas\") ");
+
+            string objectType = "PADRON_SALTA_IMP";
+            string userSign = "1";
+
+            for (int i = 0; i < batch.Count; i++)
+            {
+                var r = batch[i];
+                int rowDocEntry = startDocEntry + i;
+
+                if (string.IsNullOrEmpty(r.Code)) r.Code = SequentialId.Generate();
+                string name = string.IsNullOrEmpty(r.Name) ? r.Code : r.Name;
+
+                if (i > 0) sb.Append(" UNION ALL ");
+
+                sb.Append("SELECT ");
+
+                // --- COLUMNAS DEL SISTEMA ---
+                sb.Append($"{rowDocEntry}, ");                 // DocEntry (Entero)
+                sb.Append($"'{r.Code}', ");                    // Code
+                sb.Append($"'{Sanitize(name)}', ");            // Name
+                sb.Append("'I', ");                            // DataSource
+                sb.Append($"{userSign}, ");                    // UserSign
+                sb.Append($"'{objectType}', ");                // Object
+
+                // CORRECCIÓN PARA FECHA DE SISTEMA:
+                // Usamos CAST(CURRENT_DATE AS DATE) para que HANA no tenga dudas.
+                sb.Append("CAST(CURRENT_DATE AS DATE), ");     // CreateDate
+
+                sb.Append("'N', ");                            // Canceled
+
+                // --- COLUMNAS DE USUARIO (Revisar tipos en SAP si falla) ---
+                sb.Append($"'{Sanitize(r.U_Anio)}', ");
+                sb.Append($"'{Sanitize(r.U_Padron)}', ");
+                sb.Append($"'{Sanitize(r.U_Cuit)}', ");
+                sb.Append($"'{Sanitize(r.U_Inscripcion)}', ");
+                sb.Append($"'{Sanitize(r.U_Riesgo)}', ");
+                sb.Append($"'{Sanitize(r.U_Estado)}', ");
+                // sb.Append($"'{Sanitize(r.U_Procesado)}', ");
+                sb.Append($"'{Sanitize(r.U_Notas)}' ");
+
+                sb.Append("FROM DUMMY ");
+            }
+
+            return sb.ToString();
+        }
+        private int GetNextDocEntry()
+        {
+            Recordset rs = null;
+            try
+            {
+                rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                // Usamos IFNULL para que devuelva 0 si la tabla está vacía
+                string sql = "SELECT IFNULL(MAX(\"DocEntry\"), 0) FROM \"@PADRON_SALTA_IMP\"";
+                rs.DoQuery(sql);
+
+                if (!rs.EoF)
+                {
+                    return int.Parse(rs.Fields.Item(0).Value.ToString()) + 1;
+                }
+                return 1;
+            }
+            catch
+            {
+                return 1;
+            }
+            finally
+            {
+                if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
+            }
+        }
+
+        private string Sanitize(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return "";
+            return input.Replace("'", "''");
+        }
 
         public void ExecuteSpInsertWtd3(Company company, int entry, int linea, int wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
             {
