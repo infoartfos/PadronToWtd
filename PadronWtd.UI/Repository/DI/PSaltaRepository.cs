@@ -88,7 +88,7 @@ namespace PadronWtd.Repository.DI
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Error en GetAllAsync: {ex.Message}");
+                    _logger.Error($"Error en GetAllAsync: {ex.Message} {ex.StackTrace}");
                     throw;
                 }
                 finally
@@ -142,7 +142,7 @@ namespace PadronWtd.Repository.DI
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Error en CreateAsync: {ex.Message}");
+                    _logger.Error($"Error en CreateAsync: {ex.Message} {ex.StackTrace}");
                     throw;
                 }
                 finally
@@ -194,7 +194,7 @@ namespace PadronWtd.Repository.DI
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Error en UpdateAsync: {ex.Message}");
+                    _logger.Error($"Error en UpdateAsync: {ex.Message} {ex.StackTrace}");
                     throw;
                 }
                 finally
@@ -274,7 +274,7 @@ namespace PadronWtd.Repository.DI
                 FROM ""{DB_TABLE_NAME}"" 
                 WHERE ""U_Anio"" = '{anio}'
                 AND  ""Name"" = '{q_value}'
-                ORDER BY CAST(""Code"" AS INT) ASC";
+                ORDER BY ""Code"" ASC";
 
                     recordset.DoQuery(query);
 
@@ -306,7 +306,6 @@ namespace PadronWtd.Repository.DI
                 catch (Exception ex)
                 {
                     _logger.Error($"Error en GetByAnioAsync: {ex.Message}{ex.StackTrace}");
-                    Debug.WriteLine($"Error en GetByAnioAsync: {ex.Message}");
                     throw;
                 }
                 finally
@@ -350,67 +349,27 @@ namespace PadronWtd.Repository.DI
             });
         }
 
-        //public async Task DeleteByAnioAndQSqlAsync(string q_value, string anio)
-        //{
-        //    await Task.Run(() =>
-        //    {
-        //        Recordset recordset = null;
-        //        try
-        //        {
-        //            recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-        //            string query = $@"DELETE FROM ""{DB_TABLE_NAME}"" WHERE ""U_Anio"" = '{anio}' AND ""Name"" = '{q_value}'";
-        //            recordset.DoQuery(query);
-        //        }
-        //        finally
-        //        {
-        //            if (recordset != null) Marshal.ReleaseComObject(recordset);
-        //        }
-        //    });
-        //}
+
         // -----------------------------------------------------------------------
-        // DELETE BATCH: Borra todos los registros de un Q y Año específicos
+        // DELETE FAST: Borrado masivo vía SQL Directo
         // -----------------------------------------------------------------------
         public async Task DeleteByAnioAndQAsync(string q_value, string anio)
         {
             await Task.Run(() =>
             {
                 Recordset recordset = null;
-                UserTable userTable = null;
-
                 try
                 {
                     recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
 
                     string query = $@"
-                        SELECT ""Code"" 
-                        FROM ""{DB_TABLE_NAME}"" 
+                        DELETE FROM ""{DB_TABLE_NAME}"" 
                         WHERE ""U_Anio"" = '{anio}' 
                         AND ""Name"" = '{q_value}'";
 
                     recordset.DoQuery(query);
 
-                    if (recordset.EoF) return; // No hay nada que borrar
-
-                    userTable = _company.UserTables.Item(TABLE_NAME);
-
-                    recordset.MoveFirst();
-
-                    while (!recordset.EoF)
-                    {
-                        string codeToDelete = recordset.Fields.Item("Code").Value.ToString();
-                        if (userTable.GetByKey(codeToDelete))
-                        {
-                            int result = userTable.Remove();
-                            if (result != 0)
-                            {
-                                string errorMsg = _company.GetLastErrorDescription();
-                                _logger.Error($"Error al borrar registro Code {codeToDelete}: {errorMsg}");
-                                // Opcional: throw new Exception(...) si quieres detener todo el proceso
-                            }
-                        }
-
-                        recordset.MoveNext();
-                    }
+                    _logger.Info($"Borrado masivo ejecutado para Año: {anio}, Q: {q_value}");
                 }
                 catch (Exception ex)
                 {
@@ -420,11 +379,9 @@ namespace PadronWtd.Repository.DI
                 finally
                 {
                     if (recordset != null) Marshal.ReleaseComObject(recordset);
-                    if (userTable != null) Marshal.ReleaseComObject(userTable);
                 }
             });
         }
-
 
         public async Task BulkInsertAsync(List<PSaltaRecord> records)
         {
@@ -436,7 +393,7 @@ namespace PadronWtd.Repository.DI
                     oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
 
                     // Bajamos el tamaño del lote a 200 para evitar errores de complejidad en HANA
-                    int batchSize = 200;
+                    int batchSize = 500;
                     int totalRecords = records.Count;
                     int processed = 0;
 
@@ -453,7 +410,7 @@ namespace PadronWtd.Repository.DI
                         {
                             // Pasamos el ID base para que el método asigne IDs consecutivos
                             string sql = BuildHanaInsertBatch(batch, currentDocEntryBase);
-                            _logger.Info("SQL: " + sql);
+                            //_logger.Info("SQL: " + sql);
                             oRS.DoQuery(sql);
 
                             // Actualizamos la base para el siguiente lote
@@ -461,6 +418,7 @@ namespace PadronWtd.Repository.DI
                         }
 
                         processed += batchSize;
+                        _logger.Info("processed: " + processed + "  " + ( (processed * 100) /totalRecords) + "%  ");
                     }
                 }
                 catch (Exception ex)
@@ -559,7 +517,7 @@ namespace PadronWtd.Repository.DI
             return input.Replace("'", "''");
         }
 
-        public void ExecuteSpInsertWtd3(Company company, int entry, int linea, int wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
+        public void ExecuteSpInsertWtd3(Company company, string entry, int ?linea, int wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
             {
                 Recordset oRecordset = null;
                 try
@@ -569,10 +527,16 @@ namespace PadronWtd.Repository.DI
                     string fDesde = desde.ToString("yyyyMMdd");
                     string fHasta = hasta.ToString("yyyyMMdd");
 
+                    // --- LÓGICA DE NULOS ---
+                    string sqlEntry = string.IsNullOrEmpty(entry) ? "NULL" : entry;
+
+                    string sqlLinea = linea.HasValue ? linea.Value.ToString() : "NULL";
+
+
                     string query = $@"
                     CALL ""SBP_SIOC_CHAR"".""SP_INSERT_WTD3"" (
-                        {entry}, 
-                        {linea}, 
+                        {sqlEntry}, 
+                        {sqlLinea}, 
                         {wddCode}, 
                         '{cuit}', 
                         '{fDesde}', 
@@ -580,12 +544,13 @@ namespace PadronWtd.Repository.DI
                         '{part2}', 
                         '{detType}'
                     )";
-
+                    _logger.Info(query);
                     oRecordset.DoQuery(query);
 
                 }
                 catch (Exception ex)
                 {
+                    _logger.Error($"Error al ejecutar SP_INSERT_WTD3: {ex.Message} {ex.StackTrace}");
                     throw new Exception($"Error al ejecutar SP_INSERT_WTD3: {ex.Message}");
                 }
                 finally

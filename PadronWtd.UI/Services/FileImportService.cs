@@ -35,11 +35,12 @@ namespace PadronWtd.UI.Services
 
             // 3. Persistencia (IO Bound)
             var repository = new PSaltaRepository(App.Company);
+            _logger.Info("Borrando registros anteriores " + qValue + " " + year);
             await repository.DeleteByAnioAndQAsync(qValue, year);
-
-            //await repository.BulkInsertAsync(recordsToInsert);
-            //return recordsToInsert.Count;
-            return 5;
+            _logger.Info("terminó borrado registros anteriores ");
+            await repository.BulkInsertAsync(recordsToInsert);
+            return recordsToInsert.Count;
+            
         }
 
         private List<PSaltaRecord> ParseFile(string path, string year, string qValue)

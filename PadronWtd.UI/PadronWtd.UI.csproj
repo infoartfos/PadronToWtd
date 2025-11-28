@@ -94,6 +94,7 @@
     <Compile Include="Services\FrmImportarService.cs" />
     <Compile Include="Services\IImportService.cs" />
     <Compile Include="Services\PadronService.cs" />
+    <Compile Include="Services\ProcessInfoService.cs" />
     <Compile Include="SL\HttpDebug.cs" />
     <Compile Include="SL\PSaltaDto.cs" />
     <Compile Include="SL\SapPSaltaService.cs" />

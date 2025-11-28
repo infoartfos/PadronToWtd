@@ -107,9 +107,9 @@ namespace PadronWtd.UI.Forms
             var lblRes = AddLabel(LblResumenID, "Listo.", left, top);
             lblRes.Item.Width = 450;
 
-            top += spacing + 10;
-            var lblProg = AddLabel(LblProgressID, "Estado: Esperando archivo...", left, top);
-            lblProg.Item.Width = 450;
+            //top += spacing + 10;
+            //var lblProg = AddLabel(LblProgressID, "Estado: Esperando archivo...", left, top);
+            //lblProg.Item.Width = 450;
         }
 
         private void FillPeriodos(SAPbouiCOM.ComboBox cmb)
@@ -201,7 +201,24 @@ namespace PadronWtd.UI.Forms
                 {
                     UpdateStatus($"¡Éxito! {count} registros procesados.");
                     _application.StatusBar.SetText($"Importación completada: {count} registros.", BoMessageTime.bmt_Medium, BoStatusBarMessageType.smt_Success);
-                    _application.MessageBox($"Proceso finalizado.\nRegistros importados: {count}");
+                    // _application.MessageBox($"Proceso finalizado.\nRegistros importados: {count}");
+
+                    UpdateStatus("Procesando información en SAP...");
+
+                    var service = new ProcessInfoService();
+
+                    // Progreso para la UI
+                    var progressReporter = new Progress<int>(percent =>
+                    {
+                        _application.StatusBar.SetText($"Procesando... {percent}%", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
+                        // UpdateProgressLabel(percent);
+                    });
+
+                    int processed = await service.ProcessRecordsAsync(qValue, year, progressReporter);
+
+                    UpdateStatus($"Proceso completado. {processed} registros insertados en WTD3.");
+                    _application.MessageBox("Proceso de Retenciones finalizado.");
+
                 }
                 else
                 {
