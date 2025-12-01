@@ -5,23 +5,18 @@ using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 using SAPbouiCOM;
 using System;
-// using PadronWtd.Application.Services;
-
-// using PadronWtd.Application.Services;
+using System.IO;
 
 namespace PadronWtd.UI.Forms
 {
     internal class MainForm
     {
         private readonly Application _app;
-        //     private readonly ImpuestoService _impuestoService;
         private Form _form;
 
-        //        public MainForm(Application app, ImpuestoService impuestoService)
         public MainForm(Application app)
         {
             _app = app;
-            //       _impuestoService = impuestoService;
             string text = AppConstants.MainFormTitle;
 
             string apiUrl = AppSettings.ApiUrl;
@@ -70,11 +65,45 @@ namespace PadronWtd.UI.Forms
             {
                 switch (pVal.ItemUID)
                 {
+                    case "btnFecha":
+
+                        //try
+                        //{
+                        //    string xmlMenus = _app.Menus.GetAsXML();
+                        //    string appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "PadronWtd");
+                        //    string menuFile = Path.Combine(appData, "SapMenus.xml");
+                        //    System.IO.File.WriteAllText(menuFile, xmlMenus);
+                        //    _app.MessageBox("Menús exportados a " + menuFile);
+                        //}
+                        //catch (Exception ex)
+                        //{
+                        //    _app.MessageBox("Error: " + ex.Message);
+                        //}
+
+                        //_app.MessageBox("Fecha");
+                        string menuId = "47618";
+                        if (_app.Menus.Exists(menuId))
+                        {
+                            _app.Menus.Item(menuId).Activate();
+                        }
+                        else
+                        {
+                            _app.MessageBox($"El menú con ID '{menuId}' no existe.");
+                        }
+                        break;
                     case "btnImp":
-                        _app.MessageBox("Tasa actualizada correctamente");
+                        // _app.MessageBox("Impuestos");
+                        string menuImpuestosId = "47619";
+                        if (_app.Menus.Exists(menuImpuestosId))
+                        {
+                            _app.Menus.Item(menuImpuestosId).Activate();
+                        }
+                        else
+                        {
+                            _app.MessageBox($"El menú con ID '{menuImpuestosId}' no existe.");
+                        }
                         break;
                     case "btnProc":
-                        //_app.MessageBox($"implementada: {pVal.ItemUID}");
                         OnImportarClick();
                         break;
                     default:

@@ -11,7 +11,7 @@
 
         // --- Submenús ---
         public const string MenuPadronSaltaId = "PadronSalta.PadronSalta";
-        public const string MenuPadronSaltaTitle = "Importación";
+        public const string MenuPadronSaltaTitle = "Importación Padrón Salta";
 
 
     }
