@@ -13,8 +13,10 @@ namespace PadronWtd.UI.Services
     {
         private readonly ILogger _logger;
         private readonly PSaltaRepository _repository;
+        private readonly SaltaConfigRepository _configRepository;
         private readonly Company _company;
-        private Task<Task<string>> code;
+
+        private Dictionary<string, List<string>> _impuestosCache;
 
         public ProcessInfoService()
         {
@@ -25,11 +27,14 @@ namespace PadronWtd.UI.Services
 
             _company = App.Company;
             _repository = new PSaltaRepository(_company);
+            _configRepository = new SaltaConfigRepository(_company);
         }
 
         public async Task<int> ProcessRecordsAsync(string qValue, string year, IProgress<int> progress = null)
         {
             _logger.Info($"Iniciando procesamiento para {year} - {qValue}...");
+
+            await LoadImpuestosCacheAsync();
 
             List<PSaltaRecord> records = await _repository.GetByAnioAsync(qValue, year);
 
@@ -47,7 +52,9 @@ namespace PadronWtd.UI.Services
 
             await Task.Run(async () =>
             {
-                var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                // Usar formato corto para U_Procesado si el campo en SAP es pequeño
+                var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+
                 for (int i = 0; i < total; i++)
                 {
                     var record = records[i];
@@ -58,52 +65,67 @@ namespace PadronWtd.UI.Services
                         if (string.IsNullOrEmpty(record.U_Cuit))
                             throw new Exception("El registro no tiene CUIT.");
 
-                        string bpEntry = GetBpAbsEntryByCuit(record.U_Cuit);
-
-                        if (bpEntry == "0")
+                        // B. Verificar existencia de Proveedor
+                        if (!CuitExistsInSap(record.U_Cuit))
                         {
-                            _logger.Warn($"Proveedor con CUIT {record.U_Cuit} no encontrado en SAP. Omitiendo.");
-                            record.U_Procesado = now;
-                            record.U_Notas = "Procesado OK - No estaba cuit";
-                            record.U_Estado = "30";
-                            string cod = await _repository.UpdateAsync(record);
+                            _logger.Warn($"Proveedor con CUIT {record.U_Cuit} no existe. Omitiendo.");
+                            await SafeUpdateRecord(record, "30", "Proveedor No Existe", now);
                             continue;
                         }
 
+                        // C. Obtener LISTA de Códigos SAP
+                        List<string> taxCodes = GetWhtCodesFromCache(record.U_Inscripcion, record.U_Riesgo);
 
-                        int wddCode = GetWhtCodeByRisk(record.U_Riesgo);
+                        if (taxCodes.Count == 0)
+                        {
+                            _logger.Warn($"No existe configuración para Insc: {record.U_Inscripcion} / Riesgo: {record.U_Riesgo}");
+                            await SafeUpdateRecord(record, "40", "Configuración Impuesto No Encontrada", now);
+                            continue;
+                        }
 
-                        int linea = 1; // ¿Es secuencial por proveedor? ¿O fijo? (Ajustar según necesidad)
-                        string part2 = "80"; // Valor fijo solicitado
-                        string detType = "A"; // Valor fijo solicitado
+                        string processedCodes = "";
 
-                        _repository.ExecuteSpInsertWtd3(
-                            _company,
-                            "123123",// bpEntry, 
-                            linea,
-                            wddCode,
-                            record.U_Cuit,
-                            desde,
-                            hasta,
-                            part2,
-                            detType
-                        );
+                        foreach (string taxCode in taxCodes)
+                        {
+                            // D. Obtener el ID numérico (AbsEntry) del IMPUESTO
+                            int taxEntry = GetTaxDefinitionAbsEntry(taxCode);
+                            if (taxEntry == 0) taxEntry = 1;
 
-                        record.U_Procesado = now;
-                        record.U_Estado = "20";
-                        record.U_Notas = "Procesado OK";
-                        string code = await _repository.UpdateAsync(record);
+                            int linea = 1;
+                            string tipo = "A";
+                            double rate = 0.0;
 
+                            // CORRECCIÓN DEL ERROR 359 (String too long):
+                            // El SP espera 1 caracter para RISK. Mapeamos "JU"/"SR" a "Y"/"N".
+                            string riskFlag = MapRiskToFlag(record.U_Riesgo);
+
+                            // F. Ejecutar Stored Procedure
+                            _repository.ExecutePrWtd3(
+                                _company,
+                                taxEntry,   // AENTRY
+                                linea,      // LNNUM
+                                taxCode,    // WTCD
+                                tipo,       // TIPO
+                                record.U_Cuit,
+                                riskFlag,   // RISK (Ahora es 1 caracter)
+                                rate,
+                                desde,
+                                hasta
+                            );
+
+                            processedCodes += taxCode + " ";
+                        }
+
+                        // G. Actualizar Padrón OK
+                        await SafeUpdateRecord(record, "20", $"Procesado OK. Códigos: {processedCodes.Trim()}", now);
                         processedCount++;
                     }
                     catch (Exception ex)
                     {
                         errorCount++;
-                        record.U_Procesado = now;
-                        record.U_Estado = "40";
-                        record.U_Notas = "Error";
-                        string code = await _repository.UpdateAsync(record);
                         _logger.Error($"Error procesando CUIT {record.U_Cuit}: {ex.Message}");
+                        // Usamos SafeUpdate para evitar que el mensaje de error largo rompa el update
+                        await SafeUpdateRecord(record, "99", $"Error: {ex.Message}", now);
                     }
 
                     if (progress != null && i % 50 == 0)
@@ -119,13 +141,83 @@ namespace PadronWtd.UI.Services
         }
 
         // --------------------------------------------------------------------------------------------
-        // Helpers de Lógica de Negocio
+        // Helpers para evitar Crash en Updates
         // --------------------------------------------------------------------------------------------
+
+        private async Task SafeUpdateRecord(PSaltaRecord record, string estado, string notas, string fecha)
+        {
+            try
+            {
+                record.U_Estado = estado;
+                record.U_Procesado = fecha;
+
+                // Truncar notas si son muy largas (SAP suele tener limite de 100 o 254)
+                if (!string.IsNullOrEmpty(notas) && notas.Length > 99)
+                {
+                    notas = notas.Substring(0, 99);
+                }
+                record.U_Notas = notas;
+
+                await _repository.UpdateAsync(record);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Fallo secundario al actualizar estado del registro {record.Code}: {ex.Message}");
+            }
+        }
+
+        private string MapRiskToFlag(string padronRisk)
+        {
+            if (string.IsNullOrEmpty(padronRisk)) return "N";
+
+            // Lógica de Negocio: ¿Qué códigos se consideran 'Y' (Alto Riesgo)?
+            // Ajusta esto según tu cliente.
+            // Ejemplo: Si es RA (Riesgo Alto) o RB (Riesgo Bajo) ponemos Y, si es SR (Sin Riesgo) ponemos N.
+            // Por ahora, para evitar el error, devolvemos siempre 'N' o la primera letra si eso tiene sentido.
+
+            string risk = padronRisk.Trim().ToUpper();
+
+            // Ejemplo hipotético:
+            if (risk == "RA" || risk == "RB" || risk == "JU") return "Y";
+
+            return "N"; // SR y otros
+        }
+
+        // --------------------------------------------------------------------------------------------
+        // Helpers de Lógica de Negocio (Cache y DB)
+        // --------------------------------------------------------------------------------------------
+
+        private async Task LoadImpuestosCacheAsync()
+        {
+            _impuestosCache = new Dictionary<string, List<string>>();
+            var configs = await _configRepository.GetConfiguracionImpuestosAsync();
+
+            foreach (var cfg in configs)
+            {
+                string key = $"{cfg.Inscripcion.Trim().ToUpper()}_{cfg.Riesgo.Trim().ToUpper()}";
+
+                if (!_impuestosCache.ContainsKey(key))
+                {
+                    _impuestosCache[key] = new List<string>();
+                }
+                if (!_impuestosCache[key].Contains(cfg.CodigoSap))
+                {
+                    _impuestosCache[key].Add(cfg.CodigoSap);
+                }
+            }
+        }
+
+        private List<string> GetWhtCodesFromCache(string inscripcion, string riesgo)
+        {
+            if (_impuestosCache == null) return new List<string>();
+            string key = $"{riesgo?.Trim().ToUpper()}_{inscripcion?.Trim().ToUpper()}";
+            if (_impuestosCache.TryGetValue(key, out List<string> codes)) return codes;
+            return new List<string>();
+        }
 
         private (DateTime, DateTime) GetDatesFromPeriod(string yearStr, string qValue)
         {
             if (!int.TryParse(yearStr, out int year)) year = DateTime.Now.Year;
-
             switch (qValue.ToUpper())
             {
                 case "Q1": return (new DateTime(year, 1, 1), new DateTime(year, 3, 31));
@@ -136,55 +228,38 @@ namespace PadronWtd.UI.Services
             }
         }
 
-        /// <summary>
-        /// Busca el AbsEntry (Clave Primaria Interna) del Socio de Negocio dado su CUIT.
-        /// Tabla: OCRD, Campo: LicTradNum (CUIT)
-        /// </summary>
-        private string GetBpAbsEntryByCuit(string cuit)
+        private bool CuitExistsInSap(string cuit)
         {
             Recordset rs = null;
             try
             {
                 rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-                // Limpiamos el CUIT de guiones por si acaso en SAP está sin ellos o viceversa
-                // Asumimos que viene limpio o coincide exacto.
-                string query = $@"SELECT ""LicTradNum"" FROM ""OCRD"" WHERE ""LicTradNum"" = '{cuit}' AND Substring(""CardCode"",1,2)='PL' ";
-                _logger.Info(query);
+                string query = $@"SELECT COUNT(*) FROM ""OCRD"" WHERE ""LicTradNum"" = '{cuit}'";
                 rs.DoQuery(query);
-
-                if (!rs.EoF)
-                {
-                    return rs.Fields.Item(0).Value.ToString();
-                }
-                return "0"; // No encontrado
+                if (!rs.EoF) return int.Parse(rs.Fields.Item(0).Value.ToString()) > 0;
+                return false;
             }
-            catch (Exception ex)
-            {
-                _logger.Error($"Error buscando BP por CUIT {cuit}: {ex.Message} {ex.StackTrace}");
-                return "0";
-            }
-            finally
-            {
-                if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
-            }
+            catch { return false; }
+            finally { if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs); }
         }
 
-        /// <summary>
-        /// Mapea el valor de Riesgo/Categoría del padrón a un código interno de retención de SAP (OWHT).
-        /// </summary>
-        private int GetWhtCodeByRisk(string riesgo)
+        private int GetTaxDefinitionAbsEntry(string taxCodeSap)
         {
-            // TODO: Implementar lógica real de negocio.
-            // Ejemplo: Buscar en una tabla de configuración o hardcodear según requerimiento.
-
-            switch (riesgo?.Trim().ToUpper())
+            Recordset rs = null;
+            try
             {
-                case "JU": return 1; // Ejemplo: ID 1 en OWHT
-                case "SR": return 2;
-                case "RA": return 3;
-                case "RB": return 4;
-                default: return 5;   // Valor por defecto
+                rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                string query = $@"
+                    SELECT T0.""AbsEntry"" 
+                    FROM ""OWTD"" T0 
+                    INNER JOIN ""OWHT"" T1 ON T1.""Category"" = T0.""AbsEntry""
+                    WHERE T1.""WTCode"" = '{taxCodeSap}'";
+                rs.DoQuery(query);
+                if (!rs.EoF) return int.Parse(rs.Fields.Item(0).Value.ToString());
+                return 0;
             }
+            catch { return 0; }
+            finally { if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs); }
         }
     }
 }

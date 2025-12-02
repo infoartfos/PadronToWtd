@@ -563,6 +563,47 @@ namespace PadronWtd.Repository.DI
                 }
             }
 
+        public void ExecutePrWtd3(Company company, int absEntry, int lineNum, string wtCode, string tipo, string cuit, string risk, double rate, DateTime desde, DateTime hasta)
+        {
+            Recordset oRecordset = null;
+            try
+            {
+                oRecordset = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
 
-}
+                string fDesde = desde.ToString("yyyyMMdd");
+                string fHasta = hasta.ToString("yyyyMMdd");
+
+                // Formatear rate con punto decimal para SQL
+                string sqlRate = rate.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+                string query = $@"
+                CALL ""SBP_SIOC_CHAR"".""PR_WTD3"" (
+                    {absEntry}, 
+                    {lineNum}, 
+                    '{wtCode}', 
+                    '{tipo}', 
+                    '{cuit}', 
+                    '{risk}', 
+                    {sqlRate}, 
+                    '{fDesde}', 
+                    '{fHasta}'
+                )";
+
+                // _logger.Info("SP: " + query); // Descomentar para debug
+                oRecordset.DoQuery(query);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error ejecutando PR_WTD3: {ex.Message} {ex.StackTrace}");
+                throw new Exception($"Error ejecutando PR_WTD3: {ex.Message} {ex.StackTrace}");
+            }
+            finally
+            {
+                if (oRecordset != null) Marshal.ReleaseComObject(oRecordset);
+            }
+        }
+
+
+
+    }
 }

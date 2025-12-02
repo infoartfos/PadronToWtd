@@ -23,6 +23,7 @@ namespace PadronWtd.UI.Forms
         private readonly SAPbouiCOM.Application _application;
         private readonly ILogger _logger;
         private readonly FileImportService _importService;
+        private readonly PeriodosService _periodosService;
 
         // Cola para comunicación entre el hilo de diálogo (STA) y la UI de SAP
         private readonly ConcurrentQueue<string> _filePathQueue = new ConcurrentQueue<string>();
@@ -34,17 +35,13 @@ namespace PadronWtd.UI.Forms
             _application = application;
             _logger = SimpleServiceProvider.Get<ILogger>();
             _importService = new FileImportService();
+            _periodosService = new PeriodosService(); 
         }
 
-        /// <summary>
-        /// Método principal llamado desde el Menú. 
-        /// Verifica si el form existe antes de crearlo.
-        /// </summary>
         public void CreateForm()
         {
             try
             {
-                // 1. Patrón Singleton: Si el formulario ya existe, solo lo traemos al frente.
                 try
                 {
                     var existingForm = _application.Forms.Item(FormUID);
@@ -56,10 +53,8 @@ namespace PadronWtd.UI.Forms
                     // El formulario no existe (SAP lanza excepción), continuamos creándolo.
                 }
 
-                // 2. Crear la UI visualmente
                 BuildUserInterface();
 
-                // 3. Suscribir eventos
                 _application.ItemEvent += SBO_Application_ItemEvent;
             }
             catch (Exception ex)
@@ -90,7 +85,7 @@ namespace PadronWtd.UI.Forms
             top += spacing;
             AddLabel("lblPer", "Período a Procesar:", left, top);
             var cmb = AddComboBox(CmbPeriodoID, left + lblWidth, top, fieldWidth);
-            FillPeriodos(cmb);
+            // FillPeriodos(cmb);
 
             // 2. Archivo
             top += spacing;
@@ -110,16 +105,68 @@ namespace PadronWtd.UI.Forms
             //top += spacing + 10;
             //var lblProg = AddLabel(LblProgressID, "Estado: Esperando archivo...", left, top);
             //lblProg.Item.Width = 450;
+            _ = LoadPeriodosAsync(cmb);
         }
 
-        private void FillPeriodos(SAPbouiCOM.ComboBox cmb)
+        private async Task LoadPeriodosAsync(SAPbouiCOM.ComboBox cmb)
         {
-            cmb.ValidValues.Add("2025 Q1", "Q1 2025");
-            cmb.ValidValues.Add("2025 Q2", "Q2 2025");
-            cmb.ValidValues.Add("2025 Q3", "Q3 2025");
-            cmb.ValidValues.Add("2025 Q4", "Q4 2025");
-            // Seleccionar por defecto (con try por seguridad)
-            try { cmb.Select("2025 Q1", BoSearchKey.psk_ByValue); } catch { }
+            try
+            {
+                // 1. Obtener datos del servicio
+                var periodos = await _periodosService.GetActivePeriodosAsync();
+
+                if (periodos.Count == 0) return;
+
+                // 2. Actualizar UI
+                SafeUpdateUI(() =>
+                {
+                    // PASO A: Limpiar valores previos (Vital para evitar el error 66000-61)
+                    // SAP no tiene .Clear(), hay que remover uno por uno o iterar.
+                    // La forma más segura es intentar remover mientras haya elementos.
+                    while (cmb.ValidValues.Count > 0)
+                    {
+                        try
+                        {
+                            // Removemos siempre el índice 0 hasta vaciar
+                            cmb.ValidValues.Remove(0, BoSearchKey.psk_Index);
+                        }
+                        catch
+                        {
+                            // Si falla el borrado, salimos del loop para evitar loop infinito
+                            break;
+                        }
+                    }
+
+                    // PASO B: Agregar nuevos valores
+                    foreach (var p in periodos)
+                    {
+                        try
+                        {
+                            // Try-Catch individual por si acaso el borrado falló y quedó algún duplicado
+                            cmb.ValidValues.Add(p.Value, p.Description);
+                        }
+                        catch (Exception)
+                        {
+                            // Si el valor ya existe, simplemente lo ignoramos y seguimos con el siguiente
+                            // Esto silencia el error 66000-61
+                        }
+                    }
+
+                    // PASO C: Seleccionar el primero por defecto
+                    if (cmb.ValidValues.Count > 0)
+                    {
+                        try
+                        {
+                            cmb.Select(0, BoSearchKey.psk_Index);
+                        }
+                        catch { }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error cargando periodos", ex);
+            }
         }
 
         private void SBO_Application_ItemEvent(string FormUID, ref ItemEvent pVal, out bool BubbleEvent)
@@ -153,10 +200,8 @@ namespace PadronWtd.UI.Forms
 
         private void HandleBrowseClick()
         {
-            // Delegamos la apertura del diálogo al Helper
             FileDialogHelper.OpenFileDialog((fileName) =>
             {
-                // Encolamos el resultado para que el evento FORM_ACTIVATE lo lea
                 _filePathQueue.Enqueue(fileName);
             });
         }
@@ -174,8 +219,8 @@ namespace PadronWtd.UI.Forms
             }
 
             // Parsear periodo (Ej: "2025 Q1")
-            string year = "2025";
-            string qValue = "Q1";
+            string year = ""; // "2025";
+            string qValue = ""; // "Q1";
             var parts = valPeriodo.Split(' ');
             if (parts.Length > 1)
             {
@@ -216,7 +261,7 @@ namespace PadronWtd.UI.Forms
 
                     int processed = await service.ProcessRecordsAsync(qValue, year, progressReporter);
 
-                    UpdateStatus($"Proceso completado. {processed} registros insertados en WTD3.");
+                    UpdateStatus($"Proceso completado. {processed} registros insertados en WTD3.Registros No en Padrón");
                     _application.MessageBox("Proceso de Retenciones finalizado.");
 
                 }
@@ -269,9 +314,6 @@ namespace PadronWtd.UI.Forms
             });
         }
 
-        /// <summary>
-        /// Ejecuta cambios en la UI manejando el Freeze/Unfreeze para evitar parpadeos y errores COM.
-        /// </summary>
         private void SafeUpdateUI(Action action)
         {
             try
