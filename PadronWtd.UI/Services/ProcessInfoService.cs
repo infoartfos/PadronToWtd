@@ -1,11 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using PadronWtd.Domain;
+﻿using PadronWtd.Domain;
 using PadronWtd.Repository.DI;
 using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 using SAPbobsCOM;
+using System;
+using System.Collections.Generic;
+// Asegúrate de tener este using para las listas
+using System.Linq;
+using System.Threading.Tasks;
+using static System.Runtime.CompilerServices.RuntimeHelpers;
 
 namespace PadronWtd.UI.Services
 {
@@ -16,7 +19,8 @@ namespace PadronWtd.UI.Services
         private readonly SaltaConfigRepository _configRepository;
         private readonly Company _company;
 
-        private Dictionary<string, List<string>> _impuestosCache;
+        // CORRECCIÓN 1: Definir correctamente el tipo del diccionario
+        private Dictionary<string, List<ImpuestoCacheItem>> _impuestosCache;
 
         public ProcessInfoService()
         {
@@ -30,9 +34,11 @@ namespace PadronWtd.UI.Services
             _configRepository = new SaltaConfigRepository(_company);
         }
 
-        public async Task<int> ProcessRecordsAsync(string qValue, string year, IProgress<int> progress = null)
+        public async Task<ProcessResult> ProcessRecordsAsync(string qValue, string year, IProgress<int> progress = null)
         {
             _logger.Info($"Iniciando procesamiento para {year} - {qValue}...");
+
+            var result = new ProcessResult();
 
             await LoadImpuestosCacheAsync();
 
@@ -41,19 +47,19 @@ namespace PadronWtd.UI.Services
             if (records == null || records.Count == 0)
             {
                 _logger.Warn("No se encontraron registros para procesar.");
-                return 0;
+                return result;
             }
 
-            (DateTime desde, DateTime hasta) = GetDatesFromPeriod(year, qValue);
+            result.TotalRegistros = records.Count;
+            (DateTime desde, DateTime hasta) = await GetDynamicDates(year, qValue);
 
-            int processedCount = 0;
+            int successCount = 0;
             int errorCount = 0;
             int total = records.Count;
 
             await Task.Run(async () =>
             {
-                // Usar formato corto para U_Procesado si el campo en SAP es pequeño
-                var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+                var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
                 for (int i = 0; i < total; i++)
                 {
@@ -61,70 +67,96 @@ namespace PadronWtd.UI.Services
 
                     try
                     {
-                        // A. Validar que tengamos CUIT
                         if (string.IsNullOrEmpty(record.U_Cuit))
                             throw new Exception("El registro no tiene CUIT.");
 
-                        // B. Verificar existencia de Proveedor
                         if (!CuitExistsInSap(record.U_Cuit))
                         {
                             _logger.Warn($"Proveedor con CUIT {record.U_Cuit} no existe. Omitiendo.");
                             await SafeUpdateRecord(record, "30", "Proveedor No Existe", now);
+                            errorCount++;
                             continue;
                         }
 
-                        // C. Obtener LISTA de Códigos SAP
-                        List<string> taxCodes = GetWhtCodesFromCache(record.U_Inscripcion, record.U_Riesgo);
+                        List<ImpuestoCacheItem> taxItems = GetWhtCodesFromCache(record.U_Inscripcion, record.U_Riesgo);
 
-                        if (taxCodes.Count == 0)
+                        if (taxItems.Count == 0)
                         {
                             _logger.Warn($"No existe configuración para Insc: {record.U_Inscripcion} / Riesgo: {record.U_Riesgo}");
                             await SafeUpdateRecord(record, "40", "Configuración Impuesto No Encontrada", now);
+                            errorCount++;
                             continue;
                         }
 
                         string processedCodes = "";
 
-                        foreach (string taxCode in taxCodes)
+                        foreach (var item in taxItems)
                         {
-                            // D. Obtener el ID numérico (AbsEntry) del IMPUESTO
-                            int taxEntry = GetTaxDefinitionAbsEntry(taxCode);
-                            if (taxEntry == 0) taxEntry = 1;
+                            if (!int.TryParse(item.U_Codigo, out int taxEntry))
+                            {
+                                taxEntry = 1; // Valor por defecto si viene vacío o no es número
+                            }
 
                             int linea = 1;
                             string tipo = "A";
                             double rate = 0.0;
-
-                            // CORRECCIÓN DEL ERROR 359 (String too long):
-                            // El SP espera 1 caracter para RISK. Mapeamos "JU"/"SR" a "Y"/"N".
                             string riskFlag = MapRiskToFlag(record.U_Riesgo);
 
-                            // F. Ejecutar Stored Procedure
-                            _repository.ExecutePrWtd3(
-                                _company,
-                                taxEntry,   // AENTRY
-                                linea,      // LNNUM
-                                taxCode,    // WTCD
-                                tipo,       // TIPO
-                                record.U_Cuit,
-                                riskFlag,   // RISK (Ahora es 1 caracter)
-                                rate,
-                                desde,
-                                hasta
-                            );
-
-                            processedCodes += taxCode + " ";
+                            var execute = 2;
+                            if (execute==0)
+                            {
+                                _logger.Info($"ExecutePrWtd3 taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},tipo:{tipo},record.U_Cuit:{record.U_Cuit},riskFlag:{riskFlag},rate:{rate},desde:{desde},hasta:{hasta}");
+                                _repository.ExecutePrWtd3(
+                                    _company,
+                                    taxEntry,
+                                    linea,
+                                    item.CodigoSap,
+                                    tipo,
+                                    record.U_Cuit,
+                                    riskFlag,
+                                    rate,
+                                    desde,
+                                    hasta
+                                );
+                            } else if (execute==1) {
+                                _logger.Info($"ExecuteSpInsertWtd3 taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},record.U_Cuit:{record.U_Cuit},desde:{desde},hasta:{hasta},80,tipo:{tipo}");
+                                _repository.ExecuteSpInsertWtd3(
+                                    _company,
+                                    taxEntry,
+                                    linea,
+                                    item.CodigoSap,
+                                    record.U_Cuit,
+                                    desde,
+                                    hasta,
+                                    "80",
+                                    tipo
+                                );
+                            } else
+                            {
+                                linea = _repository.GetNextLineId(taxEntry);
+                                _logger.Info($"InsertWtd3Direct taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},record.U_Cuit:{record.U_Cuit},desde:{desde},hasta:{hasta},80,tipo:{tipo}");
+                                _repository.InsertWtd3Direct(
+                                    _company,
+                                    taxEntry,    
+                                    linea,      
+                                    item.CodigoSap, 
+                                    record.U_Cuit,
+                                    desde,
+                                    hasta,
+                                    "80",       
+                                    "A"         
+                                );
+                            }
+                            processedCodes += item.CodigoSap + " ";
                         }
 
-                        // G. Actualizar Padrón OK
                         await SafeUpdateRecord(record, "20", $"Procesado OK. Códigos: {processedCodes.Trim()}", now);
-                        processedCount++;
+                        successCount++;
                     }
                     catch (Exception ex)
                     {
                         errorCount++;
                         _logger.Error($"Error procesando CUIT {record.U_Cuit}: {ex.Message}");
-                        // Usamos SafeUpdate para evitar que el mensaje de error largo rompa el update
                         await SafeUpdateRecord(record, "99", $"Error: {ex.Message}", now);
                     }
 
@@ -136,9 +168,12 @@ namespace PadronWtd.UI.Services
                 }
             });
 
-            _logger.Info($"Procesamiento finalizado. Exitosos: {processedCount}, Errores: {errorCount}");
-            return processedCount;
+            result.ProcesadosExitosos = successCount;
+            result.RegistrosConError = errorCount;
+            _logger.Info($"Procesamiento finalizado. Total: {result.TotalRegistros}, Exitosos: {result.ProcesadosExitosos}, Errores: {result.RegistrosConError}");
+            return result;
         }
+
 
         // --------------------------------------------------------------------------------------------
         // Helpers para evitar Crash en Updates
@@ -151,7 +186,6 @@ namespace PadronWtd.UI.Services
                 record.U_Estado = estado;
                 record.U_Procesado = fecha;
 
-                // Truncar notas si son muy largas (SAP suele tener limite de 100 o 254)
                 if (!string.IsNullOrEmpty(notas) && notas.Length > 99)
                 {
                     notas = notas.Substring(0, 99);
@@ -169,18 +203,9 @@ namespace PadronWtd.UI.Services
         private string MapRiskToFlag(string padronRisk)
         {
             if (string.IsNullOrEmpty(padronRisk)) return "N";
-
-            // Lógica de Negocio: ¿Qué códigos se consideran 'Y' (Alto Riesgo)?
-            // Ajusta esto según tu cliente.
-            // Ejemplo: Si es RA (Riesgo Alto) o RB (Riesgo Bajo) ponemos Y, si es SR (Sin Riesgo) ponemos N.
-            // Por ahora, para evitar el error, devolvemos siempre 'N' o la primera letra si eso tiene sentido.
-
             string risk = padronRisk.Trim().ToUpper();
-
-            // Ejemplo hipotético:
             if (risk == "RA" || risk == "RB" || risk == "JU") return "Y";
-
-            return "N"; // SR y otros
+            return "N";
         }
 
         // --------------------------------------------------------------------------------------------
@@ -189,7 +214,8 @@ namespace PadronWtd.UI.Services
 
         private async Task LoadImpuestosCacheAsync()
         {
-            _impuestosCache = new Dictionary<string, List<string>>();
+            _impuestosCache = new Dictionary<string, List<ImpuestoCacheItem>>();
+
             var configs = await _configRepository.GetConfiguracionImpuestosAsync();
 
             foreach (var cfg in configs)
@@ -198,34 +224,48 @@ namespace PadronWtd.UI.Services
 
                 if (!_impuestosCache.ContainsKey(key))
                 {
-                    _impuestosCache[key] = new List<string>();
+                    _impuestosCache[key] = new List<ImpuestoCacheItem>();
                 }
-                if (!_impuestosCache[key].Contains(cfg.CodigoSap))
+
+                bool existe = _impuestosCache[key].Exists(x => x.CodigoSap == cfg.CodigoSap);
+
+                if (!existe)
                 {
-                    _impuestosCache[key].Add(cfg.CodigoSap);
+                    _impuestosCache[key].Add(new ImpuestoCacheItem
+                    {
+                        CodigoSap = cfg.CodigoSap,
+                        U_Codigo = cfg.U_Codigo
+                    });
                 }
             }
+
+            _logger.Info($"Caché de impuestos cargada: {_impuestosCache.Count} combinaciones.");
         }
 
-        private List<string> GetWhtCodesFromCache(string inscripcion, string riesgo)
+        private List<ImpuestoCacheItem> GetWhtCodesFromCache(string inscripcion, string riesgo)
         {
-            if (_impuestosCache == null) return new List<string>();
+            if (_impuestosCache == null) return new List<ImpuestoCacheItem>();
+
             string key = $"{riesgo?.Trim().ToUpper()}_{inscripcion?.Trim().ToUpper()}";
-            if (_impuestosCache.TryGetValue(key, out List<string> codes)) return codes;
-            return new List<string>();
+
+            if (_impuestosCache.TryGetValue(key, out List<ImpuestoCacheItem> items))
+            {
+                return items;
+            }
+            return new List<ImpuestoCacheItem>();
         }
 
-        private (DateTime, DateTime) GetDatesFromPeriod(string yearStr, string qValue)
+        private async Task<(DateTime, DateTime)> GetDynamicDates(string year, string qValue)
         {
-            if (!int.TryParse(yearStr, out int year)) year = DateTime.Now.Year;
-            switch (qValue.ToUpper())
+            var periodoService = new PeriodosService();
+            var fechas = await periodoService.GetDatesAsync(year, qValue);
+
+            if (fechas.Desde.HasValue && fechas.Hasta.HasValue)
             {
-                case "Q1": return (new DateTime(year, 1, 1), new DateTime(year, 3, 31));
-                case "Q2": return (new DateTime(year, 4, 1), new DateTime(year, 6, 30));
-                case "Q3": return (new DateTime(year, 7, 1), new DateTime(year, 9, 30));
-                case "Q4": return (new DateTime(year, 10, 1), new DateTime(year, 12, 31));
-                default: return (DateTime.Now, DateTime.Now);
+                return (fechas.Desde.Value, fechas.Hasta.Value);
             }
+
+            throw new Exception($"No se encontraron fechas configuradas para {year} {qValue}");
         }
 
         private bool CuitExistsInSap(string cuit)
@@ -242,24 +282,11 @@ namespace PadronWtd.UI.Services
             catch { return false; }
             finally { if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs); }
         }
+    }
 
-        private int GetTaxDefinitionAbsEntry(string taxCodeSap)
-        {
-            Recordset rs = null;
-            try
-            {
-                rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-                string query = $@"
-                    SELECT T0.""AbsEntry"" 
-                    FROM ""OWTD"" T0 
-                    INNER JOIN ""OWHT"" T1 ON T1.""Category"" = T0.""AbsEntry""
-                    WHERE T1.""WTCode"" = '{taxCodeSap}'";
-                rs.DoQuery(query);
-                if (!rs.EoF) return int.Parse(rs.Fields.Item(0).Value.ToString());
-                return 0;
-            }
-            catch { return 0; }
-            finally { if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs); }
-        }
+    public class ImpuestoCacheItem
+    {
+        public string CodigoSap { get; set; }
+        public string U_Codigo { get; set; }
     }
 }

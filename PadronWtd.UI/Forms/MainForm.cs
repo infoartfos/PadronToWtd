@@ -37,7 +37,7 @@ namespace PadronWtd.UI.Forms
             _form = _app.Forms.AddEx(cp);
             _form.Title = "ACTUALIZACION IMPOSITIVA *SALTA*";
             _form.Width = 430;
-            _form.Height = 260;
+            _form.Height = 300;
 
             Item label = _form.Items.Add("lblOpt", BoFormItemTypes.it_STATIC);
             label.Top = 40; label.Left = 20;
@@ -45,7 +45,8 @@ namespace PadronWtd.UI.Forms
 
             AddButton("btnFecha", "Mantenimiento de Fecha", 70);
             AddButton("btnImp",   "Mantenimiento de Impuestos", 110);
-            AddButton("btnProc", "Importar y procesar", 150);
+            AddButton("btnProc",  "Importar y procesar", 150);
+            AddButton("btnTbl",   "Tabla importación", 190);
 
             _app.ItemEvent += App_ItemEvent;
             _form.Visible = true;
@@ -105,6 +106,17 @@ namespace PadronWtd.UI.Forms
                         break;
                     case "btnProc":
                         OnImportarClick();
+                        break;
+                    case "btnTbl":
+                        string menuTblId = "47620";
+                        if (_app.Menus.Exists(menuTblId))
+                        {
+                            _app.Menus.Item(menuTblId).Activate();
+                        }
+                        else
+                        {
+                            _app.MessageBox($"El menú con ID '{menuTblId}' no existe.");
+                        }
                         break;
                     default:
                         _app.MessageBox($"Acción no implementada: {pVal.ItemUID}");

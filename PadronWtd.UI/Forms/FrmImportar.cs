@@ -1,4 +1,5 @@
-﻿using PadronWtd.UI.DI;
+﻿using PadronWtd.Domain;
+using PadronWtd.UI.DI;
 using PadronWtd.UI.Helpers;
 using PadronWtd.UI.Logging;
 using PadronWtd.UI.Services;
@@ -50,7 +51,6 @@ namespace PadronWtd.UI.Forms
                 }
                 catch
                 {
-                    // El formulario no existe (SAP lanza excepción), continuamos creándolo.
                 }
 
                 BuildUserInterface();
@@ -112,47 +112,35 @@ namespace PadronWtd.UI.Forms
         {
             try
             {
-                // 1. Obtener datos del servicio
                 var periodos = await _periodosService.GetActivePeriodosAsync();
 
                 if (periodos.Count == 0) return;
 
-                // 2. Actualizar UI
                 SafeUpdateUI(() =>
                 {
-                    // PASO A: Limpiar valores previos (Vital para evitar el error 66000-61)
-                    // SAP no tiene .Clear(), hay que remover uno por uno o iterar.
-                    // La forma más segura es intentar remover mientras haya elementos.
                     while (cmb.ValidValues.Count > 0)
                     {
                         try
                         {
-                            // Removemos siempre el índice 0 hasta vaciar
                             cmb.ValidValues.Remove(0, BoSearchKey.psk_Index);
                         }
                         catch
                         {
-                            // Si falla el borrado, salimos del loop para evitar loop infinito
                             break;
                         }
                     }
 
-                    // PASO B: Agregar nuevos valores
                     foreach (var p in periodos)
                     {
                         try
                         {
-                            // Try-Catch individual por si acaso el borrado falló y quedó algún duplicado
                             cmb.ValidValues.Add(p.Value, p.Description);
                         }
                         catch (Exception)
                         {
-                            // Si el valor ya existe, simplemente lo ignoramos y seguimos con el siguiente
-                            // Esto silencia el error 66000-61
                         }
                     }
 
-                    // PASO C: Seleccionar el primero por defecto
                     if (cmb.ValidValues.Count > 0)
                     {
                         try
@@ -173,17 +161,13 @@ namespace PadronWtd.UI.Forms
         {
             BubbleEvent = true;
 
-            // Filtrar eventos solo para este formulario
             if (FormUID != FrmImportar.FormUID) return;
 
-            // WORKAROUND: Evento Activate para chequear la cola de archivos
-            // (Ya que el OpenFileDialog corre en otro hilo, no puede escribir directo en SAP)
             if (pVal.EventType == BoEventTypes.et_FORM_ACTIVATE)
             {
                 CheckFileQueue();
             }
 
-            // Eventos de Click (After Action)
             if (pVal.EventType == BoEventTypes.et_ITEM_PRESSED && !pVal.BeforeAction)
             {
                 switch (pVal.ItemUID)
@@ -208,7 +192,6 @@ namespace PadronWtd.UI.Forms
 
         private void HandleImportClick()
         {
-            // Obtener valores UI
             string filePath = ((EditText)_oForm.Items.Item(TxtArchivoID).Specific).Value;
             string valPeriodo = ((SAPbouiCOM.ComboBox)_oForm.Items.Item(CmbPeriodoID).Specific).Value;
 
@@ -259,10 +242,15 @@ namespace PadronWtd.UI.Forms
                         // UpdateProgressLabel(percent);
                     });
 
-                    int processed = await service.ProcessRecordsAsync(qValue, year, progressReporter);
+                    ProcessResult resultado = await service.ProcessRecordsAsync(qValue, year, progressReporter);
 
-                    UpdateStatus($"Proceso completado. {processed} registros insertados en WTD3.Registros No en Padrón");
-                    _application.MessageBox("Proceso de Retenciones finalizado.");
+                    string mensajeFinal = $"Proceso Finalizado.\n\n" +
+                                          $"Total Registros: {resultado.TotalRegistros}\n" +
+                                          $"Procesados OK: {resultado.ProcesadosExitosos}\n" +
+                                          $"Con Errores/Omitidos: {resultado.RegistrosConError}";
+
+                    UpdateStatus($"{mensajeFinal}");
+                    _application.MessageBox($"{mensajeFinal}");
 
                 }
                 else

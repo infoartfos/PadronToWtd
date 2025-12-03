@@ -36,5 +36,22 @@ namespace PadronWtd.UI.Services
 
             return result;
         }
+
+        public async Task<(DateTime? Desde, DateTime? Hasta)> GetDatesAsync(string year, string qValue)
+        {
+            var rawData = await _repository.GetFechasAsync();
+
+            var periodo = rawData.FirstOrDefault(r =>
+                r.Year == year &&
+                r.U_Periodo == qValue
+            );
+
+            if (periodo != null)
+            {
+                return (periodo.U_Desde, periodo.U_Hasta);
+            }
+
+            return (null, null);
+        }
     }
 }

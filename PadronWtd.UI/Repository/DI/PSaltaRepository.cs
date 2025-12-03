@@ -517,7 +517,7 @@ namespace PadronWtd.Repository.DI
             return input.Replace("'", "''");
         }
 
-        public void ExecuteSpInsertWtd3(Company company, string entry, int ?linea, int wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
+        public void ExecuteSpInsertWtd3(Company company, int entry, int ?linea, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
             {
                 Recordset oRecordset = null;
                 try
@@ -528,7 +528,9 @@ namespace PadronWtd.Repository.DI
                     string fHasta = hasta.ToString("yyyyMMdd");
 
                     // --- LÓGICA DE NULOS ---
-                    string sqlEntry = string.IsNullOrEmpty(entry) ? "NULL" : entry;
+                    //string sqlEntry = string.IsNullOrEmpty(entry) ? "NULL" : entry;
+                    
+                    string sqlEntry =  entry.ToString();
 
                     string sqlLinea = linea.HasValue ? linea.Value.ToString() : "NULL";
 
@@ -537,7 +539,7 @@ namespace PadronWtd.Repository.DI
                     CALL ""SBP_SIOC_CHAR"".""SP_INSERT_WTD3"" (
                         {sqlEntry}, 
                         {sqlLinea}, 
-                        {wddCode}, 
+                        '{wddCode}', 
                         '{cuit}', 
                         '{fDesde}', 
                         '{fHasta}', 
@@ -573,7 +575,6 @@ namespace PadronWtd.Repository.DI
                 string fDesde = desde.ToString("yyyyMMdd");
                 string fHasta = hasta.ToString("yyyyMMdd");
 
-                // Formatear rate con punto decimal para SQL
                 string sqlRate = rate.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
                 string query = $@"
@@ -589,7 +590,7 @@ namespace PadronWtd.Repository.DI
                     '{fHasta}'
                 )";
 
-                // _logger.Info("SP: " + query); // Descomentar para debug
+                // _logger.Info("SP: " + query); 
                 oRecordset.DoQuery(query);
             }
             catch (Exception ex)
@@ -603,7 +604,85 @@ namespace PadronWtd.Repository.DI
             }
         }
 
+        public void InsertWtd3Direct(Company company, int entry, int? linea, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
+        {
+            Recordset oRecordset = null;
+            try
+            {
+                oRecordset = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
 
+                string fDesde = desde.ToString("yyyyMMdd");
+                string fHasta = hasta.ToString("yyyyMMdd");
+
+                string sqlLinea = linea.HasValue ? linea.Value.ToString() : "NULL";
+
+                string query = $@"
+            INSERT INTO ""WTD3"" 
+            (
+                ""AbsEntry"", 
+                ""LineId"", 
+                ""WTCode"", 
+                ""KeyPart1"", 
+                ""DateFrom"", 
+                ""DateTo"", 
+                ""KeyPart2"", 
+                ""DetailType""
+            )
+            VALUES 
+            (
+                {entry}, 
+                {sqlLinea}, 
+                '{wddCode}', 
+                '{cuit}', 
+                TO_DATE('{fDesde}', 'YYYYMMDD'), 
+                TO_DATE('{fHasta}', 'YYYYMMDD'), 
+                '{part2}', 
+                '{detType}'
+            )";
+
+                _logger.Info(query); 
+                oRecordset.DoQuery(query);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error al insertar directo en WTD3: {ex.Message} {ex.StackTrace}");
+                throw new Exception($"Error al insertar en WTD3: {ex.Message}");
+            }
+            finally
+            {
+                if (oRecordset != null)
+                {
+                    Marshal.ReleaseComObject(oRecordset);
+                    oRecordset = null;
+                }
+            }
+        }
+        public int GetNextLineId(int absEntry)
+        {
+            Recordset rs = null;
+            try
+            {
+                rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                string sql = $@"SELECT IFNULL(MAX(""LineId""), 0) + 1 FROM ""WTD3"" WHERE ""AbsEntry"" = {absEntry}";
+
+                rs.DoQuery(sql);
+
+                if (!rs.EoF)
+                {
+                    return int.Parse(rs.Fields.Item(0).Value.ToString());
+                }
+                return 1;
+            }
+            catch
+            {
+                return 1;
+            }
+            finally
+            {
+                if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
+            }
+        }
 
     }
 }

@@ -33,7 +33,7 @@ namespace PadronWtd.Repository.DI
 
                     // JOIN entre Cabecera y Detalle para obtener el Código SAP
                     string query = @"
-                        SELECT  T0.""U_Tipo_Insc"" , T0.""U_Riesgo"" , T1.""U_CodigoSAP"" -- , T1.""U_Codigo"" AS ""Codigo Interno""
+                        SELECT  T0.""U_Tipo_Insc"" , T0.""U_Riesgo"" , T1.""U_CodigoSAP"", T1.""U_Codigo""
                         FROM  ""@COD_SALTA_CAB"" T0
                         INNER JOIN ""@COD_SALTA_DET"" T1 ON T0.""DocEntry"" = T1.""DocEntry""
                         WHERE T0.""U_Activo"" = 'SI' 
@@ -47,7 +47,8 @@ namespace PadronWtd.Repository.DI
                         {
                             Inscripcion = GetValue(rs, "U_Tipo_Insc"),
                             Riesgo = GetValue(rs, "U_Riesgo"),
-                            CodigoSap = GetValue(rs, "U_CodigoSAP")
+                            CodigoSap = GetValue(rs, "U_CodigoSAP"),
+                            U_Codigo = GetValue(rs, "U_Codigo")
                         };
 
                         // Validar que no vengan vacíos para evitar claves nulas
