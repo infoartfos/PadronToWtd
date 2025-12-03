@@ -299,14 +299,24 @@ namespace PadronWtd.UI.Services
             try
             {
                 rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-                string query = $@"SELECT COUNT(*) FROM ""OCRD"" WHERE ""LicTradNum"" = '{cuit}'";
+
+                string query = $@"
+                    SELECT COUNT(*) 
+                    FROM ""OCRD"" 
+                    WHERE ""LicTradNum"" = '{cuit}' 
+                    AND ""CardCode"" LIKE 'PL%'";
+
                 rs.DoQuery(query);
-                if (!rs.EoF) return int.Parse(rs.Fields.Item(0).Value.ToString()) > 0;
+
+                if (!rs.EoF)
+                    return int.Parse(rs.Fields.Item(0).Value.ToString()) > 0;
+
                 return false;
             }
             catch { return false; }
             finally { if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs); }
         }
+
     }
 
     public class ImpuestoCacheItem

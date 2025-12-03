@@ -265,15 +265,15 @@ namespace PadronWtd.Repository.DI
                 {
                     recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
                     string query = $@"
-                SELECT 
-                    ""Code"", ""Name"", ""DocEntry"", ""Canceled"", ""Object"", 
-                    ""UserSign"", ""CreateDate"", ""DataSource"",
-                    ""U_Anio"", ""U_Padron"", ""U_Cuit"", ""U_Inscripcion"", 
-                    ""U_Riesgo"", ""U_Notas"", ""U_Procesado"", ""U_Estado""
-                FROM ""{DB_TABLE_NAME}"" 
-                WHERE ""U_Anio"" = '{anio}'
-                AND  ""Name"" = '{q_value}'
-                ORDER BY ""Code"" ASC";
+                        SELECT 
+                            ""Code"", ""Name"", ""DocEntry"", ""Canceled"", ""Object"", 
+                            ""UserSign"", ""CreateDate"", ""DataSource"",
+                            ""U_Anio"", ""U_Padron"", ""U_Cuit"", ""U_Inscripcion"", 
+                            ""U_Riesgo"", ""U_Notas"", ""U_Procesado"", ""U_Estado""
+                        FROM ""{DB_TABLE_NAME}"" 
+                        WHERE ""U_Anio"" = '{anio}'
+                        AND  ""Name"" = '{q_value}'
+                        ORDER BY ""Code"" ASC";
 
                     recordset.DoQuery(query);
 
