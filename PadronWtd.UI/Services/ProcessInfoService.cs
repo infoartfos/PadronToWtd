@@ -17,6 +17,7 @@ namespace PadronWtd.UI.Services
         private readonly ILogger _logger;
         private readonly PSaltaRepository _repository;
         private readonly SaltaConfigRepository _configRepository;
+        private readonly ContDateRepository _contDateRepository;
         private readonly Company _company;
 
         // CORRECCIÓN 1: Definir correctamente el tipo del diccionario
@@ -32,6 +33,7 @@ namespace PadronWtd.UI.Services
             _company = App.Company;
             _repository = new PSaltaRepository(_company);
             _configRepository = new SaltaConfigRepository(_company);
+            _contDateRepository = new ContDateRepository(_company);
         }
 
         public async Task<ProcessResult> ProcessRecordsAsync(string qValue, string year, IProgress<int> progress = null)
@@ -180,6 +182,7 @@ namespace PadronWtd.UI.Services
                 }
             });
 
+            await _contDateRepository.DeactivatePeriodAsync(year, qValue);
             result.ProcesadosExitosos = successCount;
             result.RegistrosConError = errorCount;
             _logger.Info($"Procesamiento finalizado. Total: {result.TotalRegistros}, Exitosos: {result.ProcesadosExitosos}, Errores: {result.RegistrosConError}");

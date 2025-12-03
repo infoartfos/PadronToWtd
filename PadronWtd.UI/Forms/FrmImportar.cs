@@ -20,6 +20,9 @@ namespace PadronWtd.UI.Forms
         private const string BtnImportID = "btnImport";
         private const string LblResumenID = "lblResumen";
         private const string LblProgressID = "lblProgr";
+        private const string LblLine1ID = "lblLine1";
+        private const string LblLine2ID = "lblLine2";
+        private const string LblLine3ID = "lblLine3";
 
         private readonly SAPbouiCOM.Application _application;
         private readonly ILogger _logger;
@@ -30,6 +33,7 @@ namespace PadronWtd.UI.Forms
         private readonly ConcurrentQueue<string> _filePathQueue = new ConcurrentQueue<string>();
 
         private Form _oForm;
+        private ComboBox _cmb;
 
         public FrmImportar(SAPbouiCOM.Application application)
         {
@@ -84,7 +88,7 @@ namespace PadronWtd.UI.Forms
             // 1. Periodo
             top += spacing;
             AddLabel("lblPer", "Período a Procesar:", left, top);
-            var cmb = AddComboBox(CmbPeriodoID, left + lblWidth, top, fieldWidth);
+            _cmb = AddComboBox(CmbPeriodoID, left + lblWidth, top, fieldWidth);
             // FillPeriodos(cmb);
 
             // 2. Archivo
@@ -102,10 +106,19 @@ namespace PadronWtd.UI.Forms
             var lblRes = AddLabel(LblResumenID, "", left, top);
             lblRes.Item.Width = 450;
 
-            //top += spacing + 10;
-            //var lblProg = AddLabel(LblProgressID, "Estado: Esperando archivo...", left, top);
-            //lblProg.Item.Width = 450;
-            _ = LoadPeriodosAsync(cmb);
+            top += spacing ;
+            var line1 = AddLabel(LblLine1ID, "", left, top);
+            line1.Item.Width = 450;
+
+            top += spacing ;
+            var line2 = AddLabel(LblLine2ID, "", left, top);
+            line2.Item.Width = 450;
+
+            top += spacing ;
+            var line3 = AddLabel(LblLine3ID, "", left, top);
+            line3.Item.Width = 450;
+
+            _ = LoadPeriodosAsync(_cmb);
         }
 
         private async Task LoadPeriodosAsync(SAPbouiCOM.ComboBox cmb)
@@ -210,10 +223,10 @@ namespace PadronWtd.UI.Forms
                 qValue = parts[1];
             }
 
-            string mensajeConfirmacion = $"Se va a procesar el Padrón Salta correspondiente :\n\n" +
+            string mensajeConfirmacion = $"Se va a procesar el Padrón Salta correspondiente a :\n\n" +
                                          $"Año: {year}\n" +
                                          $"Periodo: {qValue}\n\n" +
-                                         $"¿Desea continuar?";
+                                         $"¿Esta de acuerdo con los datos a procesar?";
 
             int respuesta = _application.MessageBox(mensajeConfirmacion, 1, "Sí", "No");
 
@@ -259,7 +272,7 @@ namespace PadronWtd.UI.Forms
 
                     UpdateStatus($"{mensajeFinal}");
                     _application.MessageBox($"{mensajeFinal}");
-
+                    _ = LoadPeriodosAsync(_cmb);
                 }
                 else
                 {

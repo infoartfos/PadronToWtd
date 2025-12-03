@@ -140,6 +140,59 @@ namespace PadronWtd.Repository.DI
             });
         }
 
+        // -----------------------------------------------------------------------
+        // Desactivar Periodo: Pone U_Activo = 'NO' para un Año y Q específicos
+        // -----------------------------------------------------------------------
+        public async Task DeactivatePeriodAsync(string year, string qValue)
+        {
+            await Task.Run(() =>
+            {
+                Recordset rs = null;
+                try
+                {
+                    rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                    string findQuery = $@"
+                        SELECT T1.""Code"", T1.""LineId""
+                        FROM ""@CONT_DATE_CAB"" T0
+                        INNER JOIN ""@CONT_DATE_DET"" T1 ON T0.""Code"" = T1.""Code""
+                        WHERE T0.""Name"" = '{year}' 
+                        AND T1.""U_Periodo"" = '{qValue}'";
+
+                    rs.DoQuery(findQuery);
+
+                    if (!rs.EoF)
+                    {
+                        string codeToUpdate = rs.Fields.Item("Code").Value.ToString();
+                        int lineIdToUpdate = int.Parse(rs.Fields.Item("LineId").Value.ToString());
+
+                        string updateQuery = $@"
+                            UPDATE ""@CONT_DATE_DET""
+                            SET ""U_Activo"" = 'NO'
+                            WHERE ""Code"" = '{codeToUpdate}' 
+                            AND ""LineId"" = {lineIdToUpdate}";
+
+                        rs.DoQuery(updateQuery);
+
+                        _logger.Info($"Periodo desactivado: Año {year}, Q {qValue}");
+                    }
+                    else
+                    {
+                        _logger.Warn($"No se encontró el periodo para desactivar: Año {year}, Q {qValue}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error en DeactivatePeriodAsync: {ex.Message}");
+                    throw;
+                }
+                finally
+                {
+                    if (rs != null) Marshal.ReleaseComObject(rs);
+                }
+            });
+        }
+
         // --- Helpers Privados ---
 
         private string GetValue(Recordset rs, string colName)

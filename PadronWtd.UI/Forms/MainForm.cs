@@ -46,7 +46,7 @@ namespace PadronWtd.UI.Forms
             AddButton("btnFecha", "Mantenimiento de Fecha", 70);
             AddButton("btnImp",   "Mantenimiento de Impuestos", 110);
             AddButton("btnProc",  "Importar y procesar", 150);
-            AddButton("btnTbl",   "Tabla importación", 190);
+            AddButton("btnTbl",   "Ver tabla importación", 190);
 
             _app.ItemEvent += App_ItemEvent;
             _form.Visible = true;
