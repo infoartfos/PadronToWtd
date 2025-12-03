@@ -103,7 +103,6 @@ namespace PadronWtd.Repository.DI
                             T1.""U_Hasta"", 
                             T1.""U_Activo"" 
                         FROM ""@CONT_DATE_CAB"" T0, ""@CONT_DATE_DET"" T1
-                        -- SUGERENCIA: Descomentar la siguiente línea si se duplican los datos
                         WHERE T0.""Code"" = T1.""Code""
                         ORDER BY 2,4 DESC
                     ";

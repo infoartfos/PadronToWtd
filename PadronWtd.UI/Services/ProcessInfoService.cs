@@ -102,7 +102,7 @@ namespace PadronWtd.UI.Services
                             double rate = 0.0;
                             string riskFlag = MapRiskToFlag(record.U_Riesgo);
 
-                            var execute = 2;
+                            var execute = 3;
                             if (execute==0)
                             {
                                 _logger.Info($"ExecutePrWtd3 taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},tipo:{tipo},record.U_Cuit:{record.U_Cuit},riskFlag:{riskFlag},rate:{rate},desde:{desde},hasta:{hasta}");
@@ -131,8 +131,8 @@ namespace PadronWtd.UI.Services
                                     "80",
                                     tipo
                                 );
-                            } else
-                            {
+                            } else if (execute == 2) {
+
                                 linea = _repository.GetNextLineId(taxEntry);
                                 _logger.Info($"InsertWtd3Direct taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},record.U_Cuit:{record.U_Cuit},desde:{desde},hasta:{hasta},80,tipo:{tipo}");
                                 _repository.InsertWtd3Direct(
@@ -145,6 +145,18 @@ namespace PadronWtd.UI.Services
                                     hasta,
                                     "80",       
                                     "A"         
+                                );
+                            } else
+                            {
+                                _repository.UpsertWtd3Direct(
+                                    _company,
+                                    taxEntry, 
+                                    item.CodigoSap,    
+                                    record.U_Cuit,
+                                    desde,
+                                    hasta,
+                                    "80",       // part2
+                                    "A"         // detType
                                 );
                             }
                             processedCodes += item.CodigoSap + " ";
@@ -186,17 +198,27 @@ namespace PadronWtd.UI.Services
                 record.U_Estado = estado;
                 record.U_Procesado = fecha;
 
-                if (!string.IsNullOrEmpty(notas) && notas.Length > 99)
+                if (notas != null)
                 {
-                    notas = notas.Substring(0, 99);
+                    notas = notas.Replace("'", "");
+
+                    if (notas.Length > 99)
+                    {
+                        notas = notas.Substring(0, 99);
+                    }
                 }
+                else
+                {
+                    notas = "";
+                }
+
                 record.U_Notas = notas;
 
                 await _repository.UpdateAsync(record);
             }
             catch (Exception ex)
             {
-                _logger.Error($"Fallo secundario al actualizar estado del registro {record.Code}: {ex.Message}");
+                _logger.Error($"Fallo CRÍTICO al actualizar estado en SAP para Code {record.Code}. Error original fue ignorado. Causa: {ex.Message}");
             }
         }
 

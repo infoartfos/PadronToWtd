@@ -3,6 +3,7 @@ using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 using SAPbobsCOM;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -617,28 +618,28 @@ namespace PadronWtd.Repository.DI
                 string sqlLinea = linea.HasValue ? linea.Value.ToString() : "NULL";
 
                 string query = $@"
-            INSERT INTO ""WTD3"" 
-            (
-                ""AbsEntry"", 
-                ""LineId"", 
-                ""WTCode"", 
-                ""KeyPart1"", 
-                ""DateFrom"", 
-                ""DateTo"", 
-                ""KeyPart2"", 
-                ""DetailType""
-            )
-            VALUES 
-            (
-                {entry}, 
-                {sqlLinea}, 
-                '{wddCode}', 
-                '{cuit}', 
-                TO_DATE('{fDesde}', 'YYYYMMDD'), 
-                TO_DATE('{fHasta}', 'YYYYMMDD'), 
-                '{part2}', 
-                '{detType}'
-            )";
+                    INSERT INTO ""WTD3"" 
+                    (
+                        ""AbsEntry"", 
+                        ""LineId"", 
+                        ""WTCode"", 
+                        ""KeyPart1"", 
+                        ""DateFrom"", 
+                        ""DateTo"", 
+                        ""KeyPart2"", 
+                        ""DetailType""
+                    )
+                    VALUES 
+                    (
+                        {entry}, 
+                        {sqlLinea}, 
+                        '{wddCode}', 
+                        '{cuit}', 
+                        TO_DATE('{fDesde}', 'YYYYMMDD'), 
+                        TO_DATE('{fHasta}', 'YYYYMMDD'), 
+                        '{part2}', 
+                        '{detType}'
+                    )";
 
                 _logger.Info(query); 
                 oRecordset.DoQuery(query);
@@ -657,6 +658,132 @@ namespace PadronWtd.Repository.DI
                 }
             }
         }
+
+        public void UpsertWtd3Direct(Company company, int entry, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
+        {
+            Recordset rs = null;
+            try
+            {
+                rs = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                string fDesde = desde.ToString("yyyyMMdd");
+                string fHasta = hasta.ToString("yyyyMMdd");
+
+
+                string deleteQuery = $@"
+                    DELETE FROM ""WTD3"" 
+                    WHERE ""AbsEntry"" = {entry} 
+                    AND ""KeyPart1"" = '{cuit}' 
+                    AND ""DetailType"" = '{detType}'";
+
+                _logger.Info(deleteQuery);
+                rs.DoQuery(deleteQuery);
+
+                string maxLineQuery = $@"SELECT IFNULL(MAX(""LineId""), 0) + 1 FROM ""WTD3"" WHERE ""AbsEntry"" = {entry}";
+                rs.DoQuery(maxLineQuery);
+                int newLineId = int.Parse(rs.Fields.Item(0).Value.ToString());
+
+                string insertQuery = $@"
+                    INSERT INTO ""WTD3"" 
+                    (""AbsEntry"", ""LineId"", ""WTCode"", ""KeyPart1"", ""DateFrom"", ""DateTo"", ""KeyPart2"", ""DetailType"")
+                    VALUES 
+                    (
+                        {entry}, 
+                        {newLineId}, 
+                        '{wddCode}', 
+                        '{cuit}', 
+                        TO_DATE('{fDesde}', 'YYYYMMDD'), 
+                        TO_DATE('{fHasta}', 'YYYYMMDD'), 
+                        '{part2}', 
+                        '{detType}'
+                    )";
+                _logger.Info(insertQuery);
+                rs.DoQuery(insertQuery);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error al procesar WTD3 (Delete/Insert): {ex.Message}");
+            }
+            finally
+            {
+                if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
+            }
+        }
+
+        //public void UpsertWtd3Direct(Company company, int entry, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
+        //{
+        //    Recordset rs = null;
+        //    try
+        //    {
+        //        rs = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+        //        string fDesde = desde.ToString("yyyyMMdd");
+        //        string fHasta = hasta.ToString("yyyyMMdd");
+
+        //        string checkQuery = $@"
+        //            SELECT ""LineId"" 
+        //            FROM ""WTD3"" 
+        //            WHERE ""AbsEntry"" = {entry} 
+        //            AND ""KeyPart1"" = '{cuit}' 
+        //            AND ""DetailType"" = '{detType}'";
+
+        //        rs.DoQuery(checkQuery);
+
+        //        if (!rs.EoF)
+        //        {
+        //            int existingLineId = int.Parse(rs.Fields.Item("LineId").Value.ToString());
+
+        //            string updateQuery = $@"
+        //                UPDATE ""WTD3"" 
+        //                SET 
+        //                    ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD'),
+        //                    ""DateTo"" = TO_DATE('{fHasta}', 'YYYYMMDD'),
+        //                    ""WTCode"" = '{wddCode}' 
+        //                WHERE ""AbsEntry"" = {entry} 
+        //                AND ""LineId"" = {existingLineId}";
+
+        //            _logger.Info("UPDATE WTD3: " + updateQuery);
+        //            rs.DoQuery(updateQuery);
+        //        }
+        //        else
+        //        {
+        //            string maxLineQuery = $@"SELECT IFNULL(MAX(""LineId""), 0) + 1 FROM ""WTD3"" WHERE ""AbsEntry"" = {entry}";
+        //            rs.DoQuery(maxLineQuery);
+        //            int newLineId = int.Parse(rs.Fields.Item(0).Value.ToString());
+
+        //            string insertQuery = $@"
+        //                INSERT INTO ""WTD3"" 
+        //                (""AbsEntry"", ""LineId"", ""WTCode"", ""KeyPart1"", ""DateFrom"", ""DateTo"", ""KeyPart2"", ""DetailType"")
+        //                VALUES 
+        //                (
+        //                    {entry}, 
+        //                    {newLineId}, 
+        //                    '{wddCode}', 
+        //                    '{cuit}', 
+        //                    TO_DATE('{fDesde}', 'YYYYMMDD'), 
+        //                    TO_DATE('{fHasta}', 'YYYYMMDD'), 
+        //                    '{part2}', 
+        //                    '{detType}'
+        //                )";
+
+        //            _logger.Info("INSERT WTD3: " + insertQuery);
+        //            rs.DoQuery(insertQuery);
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        throw new Exception($"Error al procesar WTD3 (Upsert): {ex.Message}");
+        //    }
+        //    finally
+        //    {
+        //        if (rs != null)
+        //        {
+        //            System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
+        //            rs = null;
+        //        }
+        //    }
+        //}
+
         public int GetNextLineId(int absEntry)
         {
             Recordset rs = null;

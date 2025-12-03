@@ -99,7 +99,7 @@ namespace PadronWtd.UI.Forms
 
             // 4. Feedback
             top += spacing * 2;
-            var lblRes = AddLabel(LblResumenID, "Listo.", left, top);
+            var lblRes = AddLabel(LblResumenID, "", left, top);
             lblRes.Item.Width = 450;
 
             //top += spacing + 10;
@@ -201,9 +201,8 @@ namespace PadronWtd.UI.Forms
                 return;
             }
 
-            // Parsear periodo (Ej: "2025 Q1")
-            string year = ""; // "2025";
-            string qValue = ""; // "Q1";
+            string year = "";
+            string qValue = "";
             var parts = valPeriodo.Split(' ');
             if (parts.Length > 1)
             {
@@ -211,10 +210,20 @@ namespace PadronWtd.UI.Forms
                 qValue = parts[1];
             }
 
-            // Ejecutar lógica asíncrona
+            string mensajeConfirmacion = $"Se va a procesar el Padrón Salta correspondiente :\n\n" +
+                                         $"Año: {year}\n" +
+                                         $"Periodo: {qValue}\n\n" +
+                                         $"¿Desea continuar?";
+
+            int respuesta = _application.MessageBox(mensajeConfirmacion, 1, "Sí", "No");
+
+            if (respuesta != 1)
+            {
+                return;
+            }
+
             _ = RunImportProcessAsync(filePath, year, qValue);
         }
-
         private async Task RunImportProcessAsync(string filePath, string year, string qValue)
         {
             try
@@ -222,7 +231,6 @@ namespace PadronWtd.UI.Forms
                 SetUIBusy(true);
                 UpdateStatus("Leyendo y procesando archivo...");
 
-                // Llamada al Servicio de Negocio
                 int count = await _importService.ProcessImportAsync(filePath, year, qValue);
 
                 if (count > 0)
