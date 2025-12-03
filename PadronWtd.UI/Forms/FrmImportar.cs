@@ -242,36 +242,35 @@ namespace PadronWtd.UI.Forms
             try
             {
                 SetUIBusy(true);
+                // Limpiar etiquetas previas antes de empezar
+                UpdateResultLabels("", "", "");
                 UpdateStatus("Leyendo y procesando archivo...");
 
                 int count = await _importService.ProcessImportAsync(filePath, year, qValue);
 
                 if (count > 0)
                 {
-                    UpdateStatus($"¡Éxito! {count} registros procesados.");
-                    _application.StatusBar.SetText($"Importación completada: {count} registros.", BoMessageTime.bmt_Medium, BoStatusBarMessageType.smt_Success);
-                    // _application.MessageBox($"Proceso finalizado.\nRegistros importados: {count}");
-
-                    UpdateStatus("Procesando información en SAP...");
+                    UpdateStatus($"Importación completada: {count} registros. Iniciando proceso SAP...");
+                    _application.StatusBar.SetText($"Importación completada. Iniciando proceso SAP...", BoMessageTime.bmt_Medium, BoStatusBarMessageType.smt_Success);
 
                     var service = new ProcessInfoService();
 
-                    // Progreso para la UI
                     var progressReporter = new Progress<int>(percent =>
                     {
                         _application.StatusBar.SetText($"Procesando... {percent}%", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
-                        // UpdateProgressLabel(percent);
                     });
 
                     ProcessResult resultado = await service.ProcessRecordsAsync(qValue, year, progressReporter);
 
-                    string mensajeFinal = $"Proceso Finalizado.\n\n" +
-                                          $"Total Registros: {resultado.TotalRegistros}\n" +
-                                          $"Procesados OK: {resultado.ProcesadosExitosos}\n" +
-                                          $"Con Errores/Omitidos: {resultado.RegistrosConError}";
+                    // MOSTRAR RESULTADOS EN LAS 3 LÍNEAS
+                    string txtTotal = $"Total Registros: {resultado.TotalRegistros}";
+                    string txtOk = $"Procesados OK: {resultado.ProcesadosExitosos}";
+                    string txtError = $"Con Errores/Omitidos: {resultado.RegistrosConError}";
 
-                    UpdateStatus($"{mensajeFinal}");
-                    _application.MessageBox($"{mensajeFinal}");
+                    UpdateResultLabels(txtTotal, txtOk, txtError);
+
+                    _application.MessageBox($"Proceso Finalizado.\n{txtTotal}\n{txtOk}\n{txtError}");
+
                     _ = LoadPeriodosAsync(_cmb);
                 }
                 else
@@ -291,7 +290,6 @@ namespace PadronWtd.UI.Forms
                 SetUIBusy(false);
             }
         }
-
         // --- Helpers de UI y Thread Safety ---
 
         private void CheckFileQueue()
@@ -340,6 +338,19 @@ namespace PadronWtd.UI.Forms
             }
         }
 
+
+        private void UpdateResultLabels(string line1Text, string line2Text, string line3Text)
+        {
+            SafeUpdateUI(() =>
+            {
+                ((StaticText)_oForm.Items.Item(LblLine1ID).Specific).Caption = line1Text;
+                ((StaticText)_oForm.Items.Item(LblLine2ID).Specific).Caption = line2Text;
+                ((StaticText)_oForm.Items.Item(LblLine3ID).Specific).Caption = line3Text;
+
+                // Limpiamos el resumen general para que no se vea duplicado o sucio
+                ((StaticText)_oForm.Items.Item(LblResumenID).Specific).Caption = "Proceso Finalizado.";
+            });
+        }
         // --- Wrappers para creación de controles (Reducen ruido visual) ---
 
         private StaticText AddLabel(string uid, string caption, int left, int top)

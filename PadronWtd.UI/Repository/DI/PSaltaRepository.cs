@@ -215,8 +215,6 @@ namespace PadronWtd.Repository.DI
             try
             {
                 recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-                // Consulta optimizada para obtener el último código numérico
-                // Compatible con SQL Server y HANA si el campo Code es numérico
                 string sql = $@"SELECT TOP 1 ""Code"" FROM ""{DB_TABLE_NAME}"" ORDER BY CAST(""Code"" AS INT) DESC";
 
                 recordset.DoQuery(sql);
@@ -393,14 +391,10 @@ namespace PadronWtd.Repository.DI
                 {
                     oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
 
-                    // Bajamos el tamaño del lote a 200 para evitar errores de complejidad en HANA
                     int batchSize = 500;
                     int totalRecords = records.Count;
                     int processed = 0;
 
-                    // 1. Obtener el DocEntry inicial UNA SOLA VEZ al principio (o por lote si hay concurrencia)
-                    // Para ser más seguros ante concurrencia, lo ideal es obtenerlo justo antes de cada insert,
-                    // pero para imports masivos únicos, tomarlo al inicio y sumar en memoria es mucho más rápido.
                     int currentDocEntryBase = GetNextDocEntry();
 
                     while (processed < totalRecords)
@@ -409,12 +403,10 @@ namespace PadronWtd.Repository.DI
 
                         if (batch.Any())
                         {
-                            // Pasamos el ID base para que el método asigne IDs consecutivos
                             string sql = BuildHanaInsertBatch(batch, currentDocEntryBase);
-                            //_logger.Info("SQL: " + sql);
+                            _logger.Info("SQL: " + sql);
                             oRS.DoQuery(sql);
 
-                            // Actualizamos la base para el siguiente lote
                             currentDocEntryBase += batch.Count;
                         }
 
@@ -528,9 +520,6 @@ namespace PadronWtd.Repository.DI
                     string fDesde = desde.ToString("yyyyMMdd");
                     string fHasta = hasta.ToString("yyyyMMdd");
 
-                    // --- LÓGICA DE NULOS ---
-                    //string sqlEntry = string.IsNullOrEmpty(entry) ? "NULL" : entry;
-                    
                     string sqlEntry =  entry.ToString();
 
                     string sqlLinea = linea.HasValue ? linea.Value.ToString() : "NULL";
