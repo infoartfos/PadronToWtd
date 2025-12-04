@@ -44,6 +44,15 @@ namespace PadronWtd.UI.Services
 
             await LoadImpuestosCacheAsync();
 
+            var stats = await _repository.GetStatsByAnioAsync(qValue, year);
+            int total = (stats.ContainsKey("Importado") ? stats["Importado"] : 0) +
+                        (stats.ContainsKey("Procesado") ? stats["Procesado"] : 0) +
+                        (stats.ContainsKey("No Encontrado") ? stats["No Encontrado"] : 0) +
+                        (stats.ContainsKey("Error") ? stats["Error"] : 0);
+
+
+            await _repository.MarkNonExistentProvidersAsync(qValue, year);
+
             List<PSaltaRecord> records = await _repository.GetByAnioAsync(qValue, year);
 
             if (records == null || records.Count == 0)
@@ -52,18 +61,18 @@ namespace PadronWtd.UI.Services
                 return result;
             }
 
-            result.TotalRegistros = records.Count;
+            result.TotalRegistros = total;
             (DateTime desde, DateTime hasta) = await GetDynamicDates(year, qValue);
 
             int successCount = 0;
             int errorCount = 0;
-            int total = records.Count;
+            int recordCount = records.Count();
 
             await Task.Run(async () =>
             {
                 var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
-                for (int i = 0; i < total; i++)
+                for (int i = 0; i < recordCount; i++)
                 {
                     var record = records[i];
 
@@ -94,17 +103,16 @@ namespace PadronWtd.UI.Services
 
                         foreach (var item in taxItems)
                         {
+                            string tipo = "A";
+                            double rate = 0.0;
                             if (!int.TryParse(item.U_Codigo, out int taxEntry))
                             {
                                 taxEntry = 1; // Valor por defecto si viene vacío o no es número
                             }
-
-                            int linea = 1;
-                            string tipo = "A";
-                            double rate = 0.0;
+                            int linea = _repository.GetNextLineId(taxEntry);
                             string riskFlag = MapRiskToFlag(record.U_Riesgo);
 
-                            var execute = 3;
+                            var execute = 4;
                             if (execute==0)
                             {
                                 _logger.Info($"ExecutePrWtd3 taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},tipo:{tipo},record.U_Cuit:{record.U_Cuit},riskFlag:{riskFlag},rate:{rate},desde:{desde},hasta:{hasta}");
@@ -121,6 +129,7 @@ namespace PadronWtd.UI.Services
                                     hasta
                                 );
                             } else if (execute==1) {
+
                                 _logger.Info($"ExecuteSpInsertWtd3 taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},record.U_Cuit:{record.U_Cuit},desde:{desde},hasta:{hasta},80,tipo:{tipo}");
                                 _repository.ExecuteSpInsertWtd3(
                                     _company,
@@ -135,7 +144,6 @@ namespace PadronWtd.UI.Services
                                 );
                             } else if (execute == 2) {
 
-                                linea = _repository.GetNextLineId(taxEntry);
                                 _logger.Info($"InsertWtd3Direct taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},record.U_Cuit:{record.U_Cuit},desde:{desde},hasta:{hasta},80,tipo:{tipo}");
                                 _repository.InsertWtd3Direct(
                                     _company,
@@ -148,7 +156,7 @@ namespace PadronWtd.UI.Services
                                     "80",       
                                     "A"         
                                 );
-                            } else
+                            } else if (execute == 3)
                             {
                                 _repository.UpsertWtd3Direct(
                                     _company,
@@ -160,6 +168,11 @@ namespace PadronWtd.UI.Services
                                     "80",       // part2
                                     "A"         // detType
                                 );
+                            } else
+                            { // execute == 4 
+                                //        public void ExecutePrWtd3Logic(Company company, string entryStr, string wtCode, string tipo, string cuit, string risk, double rate, DateTime desde, DateTime hasta)
+                                _logger.Info($"ExecutePrWtd3Logic entryStr:{item.U_Codigo},wtCode:{item.CodigoSap}, tipo:{tipo},cuit:{record.U_Cuit},risk:N,rate:{rate},desde:{desde},hasta:{hasta}");
+                                _repository.ExecutePrWtd3Logic(_company, item.U_Codigo, item.CodigoSap, tipo, record.U_Cuit, "N", rate, desde, hasta);
                             }
                             processedCodes += item.CodigoSap + " ";
                         }
@@ -170,8 +183,8 @@ namespace PadronWtd.UI.Services
                     catch (Exception ex)
                     {
                         errorCount++;
-                        _logger.Error($"Error procesando CUIT {record.U_Cuit}: {ex.Message}");
-                        await SafeUpdateRecord(record, "99", $"Error: {ex.Message}", now);
+                        _logger.Error($"Error procesando CUIT {record.U_Cuit}: {ex.Message} {ex.StackTrace}");
+                        await SafeUpdateRecord(record, "40", $"Error: Insertando en WDT3", now);
                     }
 
                     if (progress != null && i % 50 == 0)
@@ -183,8 +196,17 @@ namespace PadronWtd.UI.Services
             });
 
             await _contDateRepository.DeactivatePeriodAsync(year, qValue);
-            result.ProcesadosExitosos = successCount;
+            
+            //stats = await _repository.GetStatsByAnioAsync(qValue, year);
+            //total = (stats.ContainsKey("Importado") ? stats["Importado"] : 0) +
+            //            (stats.ContainsKey("Procesado") ? stats["Procesado"] : 0) +
+            //            (stats.ContainsKey("No Encontrado") ? stats["No Encontrado"] : 0) +
+            //            (stats.ContainsKey("Error") ? stats["Error"] : 0);
+
             result.RegistrosConError = errorCount;
+
+            // result.ProcesadosExitosos = successCount;
+            result.ProcesadosExitosos = result.TotalRegistros - result.RegistrosConError;
             _logger.Info($"Procesamiento finalizado. Total: {result.TotalRegistros}, Exitosos: {result.ProcesadosExitosos}, Errores: {result.RegistrosConError}");
             return result;
         }
@@ -303,8 +325,8 @@ namespace PadronWtd.UI.Services
                 string query = $@"
                     SELECT COUNT(*) 
                     FROM ""OCRD"" 
-                    WHERE ""LicTradNum"" = '{cuit}' 
-                    AND ""CardCode"" LIKE 'PL%'";
+                    WHERE ""LicTradNum"" = '{cuit}'
+                    AND UPPER(""CardCode"") LIKE 'PL%'";
 
                 rs.DoQuery(query);
 

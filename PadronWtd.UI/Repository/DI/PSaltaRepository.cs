@@ -273,8 +273,9 @@ namespace PadronWtd.Repository.DI
                         FROM ""{DB_TABLE_NAME}"" 
                         WHERE ""U_Anio"" = '{anio}'
                         AND  ""Name"" = '{q_value}'
+                        AND ""U_Estado"" = 'Importado'
                         ORDER BY ""Code"" ASC";
-
+                    _logger.Info($"Query : {query}");
                     recordset.DoQuery(query);
 
                     while (!recordset.EoF)
@@ -391,7 +392,7 @@ namespace PadronWtd.Repository.DI
                 {
                     oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
 
-                    int batchSize = 500;
+                    int batchSize = 700;
                     int totalRecords = records.Count;
                     int processed = 0;
 
@@ -404,7 +405,7 @@ namespace PadronWtd.Repository.DI
                         if (batch.Any())
                         {
                             string sql = BuildHanaInsertBatch(batch, currentDocEntryBase);
-                            _logger.Info("SQL: " + sql);
+                            // _logger.Info("SQL: " + sql);
                             oRS.DoQuery(sql);
 
                             currentDocEntryBase += batch.Count;
@@ -510,9 +511,55 @@ namespace PadronWtd.Repository.DI
             return input.Replace("'", "''");
         }
 
+        // -----------------------------------------------------------------------
+        // UPDATE MASSIVE: Marca como '30' (No Existe) los proveedores que no están en OCRD
+        // -----------------------------------------------------------------------
+        public async Task<int> MarkNonExistentProvidersAsync(string qValue, string year)
+        {
+            return await Task.Run(() =>
+            {
+                Recordset rs = null;
+                try
+                {
+                    rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                    string updateQuery = $@"
+                        UPDATE ""{DB_TABLE_NAME}""
+                        SET 
+                            ""U_Estado"" = 'No Encontrado',
+                            ""U_Procesado"" = TO_VARCHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI'),
+                            ""U_Notas"" = 'Proveedor No Existe (pl)'
+                        WHERE ""U_Anio"" = '{year}'
+                        AND ""Name"" = '{qValue}'
+                        AND ""U_Estado"" = 'Importado' 
+                        AND NOT EXISTS (
+                            SELECT 1 
+                            FROM ""OCRD"" T0 
+                            WHERE T0.""LicTradNum"" = ""{DB_TABLE_NAME}"".""U_Cuit""
+                            AND UPPER(T0.""CardCode"") LIKE 'PL%'
+                        )";
+
+                    _logger.Info("Ejecutando validación masiva de proveedores...");
+                    _logger.Info(updateQuery);
+                    rs.DoQuery(updateQuery);
+                    return 0;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error en MarkNonExistentProvidersAsync: {ex.Message}");
+                    throw;
+                }
+                finally
+                {
+                    if (rs != null) Marshal.ReleaseComObject(rs);
+                }
+            });
+        }
+
         public void ExecuteSpInsertWtd3(Company company, int entry, int ?linea, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
             {
                 Recordset oRecordset = null;
+
                 try
                 {
                     oRecordset = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
@@ -527,7 +574,7 @@ namespace PadronWtd.Repository.DI
 
                     string query = $@"
                     CALL ""SBP_SIOC_CHAR"".""SP_INSERT_WTD3"" (
-                        {sqlEntry}, 
+                        {entry}, 
                         {sqlLinea}, 
                         '{wddCode}', 
                         '{cuit}', 
@@ -699,6 +746,108 @@ namespace PadronWtd.Repository.DI
             }
         }
 
+
+        // -----------------------------------------------------------------------
+        // Lógica C# equivalente al SP PR_WTD3 (Upsert inteligente)
+        // -----------------------------------------------------------------------
+        public void ExecutePrWtd3Logic(Company company, string entryStr, string wtCode, string tipo, string cuit, string risk, double rate, DateTime desde, DateTime hasta)
+        {
+            Recordset rs = null;
+            try
+            {
+                // 1. Validar y convertir Entry
+                if (!int.TryParse(entryStr, out int absEntry))
+                {
+                    throw new Exception($"El AbsEntry '{entryStr}' no es un número válido.");
+                }
+
+                rs = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                string fDesde = desde.ToString("yyyyMMdd");
+                string fHasta = hasta.ToString("yyyyMMdd");
+                string sqlRate = rate.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+                // -----------------------------------------------------------
+                // PASO 1: Verificar existencia (Equivalente a HAY1 en el SP)
+                // -----------------------------------------------------------
+                string checkQuery = $@"
+                    SELECT ""LineId""
+                    FROM ""WTD3""
+                    WHERE ""AbsEntry"" = {absEntry} 
+                    AND ""KeyPart1"" = '{cuit}' 
+                    AND ""DetailType"" = '{tipo}'";
+
+                rs.DoQuery(checkQuery);
+
+                if (!rs.EoF)
+                {
+                    // -----------------------------------------------------------
+                    // CAMINO A: UPDATE (Si HAY1 > 0)
+                    // Solo actualizamos la fecha de fin (DateTo), igual que el SP
+                    // -----------------------------------------------------------
+                    int existingLineId = int.Parse(rs.Fields.Item("LineId").Value.ToString());
+
+                    string updateQuery = $@"
+                        UPDATE ""WTD3"" 
+                        SET ""DateTo"" = TO_DATE('{fHasta}', 'YYYYMMDD')
+                        WHERE ""AbsEntry"" = {absEntry} 
+                        AND ""LineId"" = {existingLineId}";
+
+                    // _logger.Info($"Actualizando WTD3 (Update) para CUIT {cuit}");
+                    rs.DoQuery(updateQuery);
+                }
+                else
+                {
+                    // -----------------------------------------------------------
+                    // CAMINO B: INSERT (Si HAY1 = 0)
+                    // Calculamos LineId dinámico para evitar 'Duplicate Key' (HAY2 del SP)
+                    // -----------------------------------------------------------
+
+                    // B1. Calcular próximo LineId
+                    string maxLineQuery = $@"SELECT IFNULL(MAX(""LineId""), 0) + 1 FROM ""WTD3"" WHERE ""AbsEntry"" = {absEntry}";
+                    rs.DoQuery(maxLineQuery);
+                    int newLineId = int.Parse(rs.Fields.Item(0).Value.ToString());
+
+                    // B2. Insertar
+                    string insertQuery = $@"
+                        INSERT INTO ""WTD3"" 
+                        (
+                            ""AbsEntry"", ""LineId"", ""WTCode"", ""KeyPart1"", ""KeyPart2"", ""DetailType"",
+                            ""U_B1SYS_HighRisk"", ""Rate"", ""DateFrom"", ""DateTo"", ""DataSource"", ""LogInstanc""
+                        )
+                        VALUES 
+                        (
+                            {absEntry}, 
+                            {newLineId}, 
+                            '{wtCode}', 
+                            '{cuit}', 
+                            '80', 
+                            '{tipo}', 
+                            '{risk}', 
+                            {sqlRate}, 
+                            TO_DATE('{fDesde}', 'YYYYMMDD'), 
+                            TO_DATE('{fHasta}', 'YYYYMMDD'), 
+                            'N', 
+                            0
+                        )";
+
+                    // _logger.Info($"Insertando WTD3 (New) para CUIT {cuit}");
+                    rs.DoQuery(insertQuery);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error en ExecutePrWtd3Logic (Cuit: {cuit}): {ex.Message}");
+            }
+            finally
+            {
+                if (rs != null)
+                {
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
+                    rs = null;
+                }
+            }
+        }
         //public void UpsertWtd3Direct(Company company, int entry, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
         //{
         //    Recordset rs = null;
@@ -772,6 +921,53 @@ namespace PadronWtd.Repository.DI
         //        }
         //    }
         //}
+
+        // -----------------------------------------------------------------------
+        // GET STATS: Cuenta registros agrupados por Estado para un Año y Q
+        // -----------------------------------------------------------------------
+        public async Task<Dictionary<string, int>> GetStatsByAnioAsync(string qValue, string year)
+        {
+            return await Task.Run(() =>
+            {
+                var stats = new Dictionary<string, int>();
+                Recordset rs = null;
+
+                try
+                {
+                    rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                    string query = $@"
+                        SELECT ""U_Estado"", COUNT(*) AS ""Total""
+                        FROM ""{DB_TABLE_NAME}"" 
+                        WHERE ""U_Anio"" = '{year}' 
+                        AND ""Name"" = '{qValue}'
+                        GROUP BY ""U_Estado""
+                        ORDER BY ""U_Estado"" ASC";
+
+                    rs.DoQuery(query);
+
+                    while (!rs.EoF)
+                    {
+                        string estado = rs.Fields.Item("U_Estado").Value?.ToString() ?? "N/A";
+                        int total = int.Parse(rs.Fields.Item("Total").Value.ToString());
+
+                        stats.Add(estado, total);
+                        rs.MoveNext();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error en GetStatsByAnioAsync: {ex.Message}");
+                }
+                finally
+                {
+                    if (rs != null) Marshal.ReleaseComObject(rs);
+                }
+
+                return stats;
+            });
+        }
+
 
         public int GetNextLineId(int absEntry)
         {
