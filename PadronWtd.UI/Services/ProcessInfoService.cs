@@ -197,16 +197,7 @@ namespace PadronWtd.UI.Services
             });
 
             await _contDateRepository.DeactivatePeriodAsync(year, qValue);
-            
-            //stats = await _repository.GetStatsByAnioAsync(qValue, year);
-            //total = (stats.ContainsKey("Importado") ? stats["Importado"] : 0) +
-            //            (stats.ContainsKey("Procesado") ? stats["Procesado"] : 0) +
-            //            (stats.ContainsKey("No Encontrado") ? stats["No Encontrado"] : 0) +
-            //            (stats.ContainsKey("Error") ? stats["Error"] : 0);
-
             result.RegistrosConError = errorCount;
-
-            // result.ProcesadosExitosos = successCount;
             result.ProcesadosExitosos = result.TotalRegistros - result.RegistrosConError;
             _logger.Info($"Procesamiento finalizado. Total: {result.TotalRegistros}, Exitosos: {result.ProcesadosExitosos}, Errores: {result.RegistrosConError}");
             return result;

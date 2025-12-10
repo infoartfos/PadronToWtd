@@ -4,7 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using PadronWtd.Domain;
 using PadronWtd.Repository.DI;
-using PadronWtd.UI.DI; // Para acceder a App.Company
+using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 
 namespace PadronWtd.UI.Services
