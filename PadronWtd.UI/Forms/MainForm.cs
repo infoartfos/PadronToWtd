@@ -18,38 +18,42 @@ namespace PadronWtd.UI.Forms
         {
             _app = app;
             string text = AppConstants.MainFormTitle;
-
             string apiUrl = AppSettings.ApiUrl;
 
             Console.WriteLine("Title  : " + text);
-            Console.WriteLine("API URL: " + apiUrl);
-
             CreateForm();
         }
 
         private void CreateForm()
         {
-            FormCreationParams cp = (FormCreationParams)_app.CreateObject(BoCreatableObjectType.cot_FormCreationParams);
-            cp.UniqueID = "frmPadron";
-            cp.FormType = "frmPadron";
-            cp.BorderStyle = BoFormBorderStyle.fbs_Fixed;
+            try
+            {
+                FormCreationParams cp = (FormCreationParams)_app.CreateObject(BoCreatableObjectType.cot_FormCreationParams);
+                cp.UniqueID = "frmPadron";
+                cp.FormType = "frmPadron";
+                cp.BorderStyle = BoFormBorderStyle.fbs_Fixed;
 
-            _form = _app.Forms.AddEx(cp);
-            _form.Title = "ACTUALIZACION IMPOSITIVA *SALTA*";
-            _form.Width = 430;
-            _form.Height = 300;
+                _form = _app.Forms.AddEx(cp);
+                _form.Title = "ACTUALIZACION IMPOSITIVA *SALTA*";
+                _form.Width = 430;
+                _form.Height = 300;
 
-            Item label = _form.Items.Add("lblOpt", BoFormItemTypes.it_STATIC);
-            label.Top = 40; label.Left = 20;
-            ((StaticText)label.Specific).Caption = "Opciones:";
+                Item label = _form.Items.Add("lblOpt", BoFormItemTypes.it_STATIC);
+                label.Top = 40; label.Left = 20;
+                ((StaticText)label.Specific).Caption = "Opciones:";
 
-            AddButton("btnFecha", "Mantenimiento de Fecha", 70);
-            AddButton("btnImp",   "Mantenimiento de Impuestos", 110);
-            AddButton("btnProc",  "Importar y procesar", 150);
-            AddButton("btnTbl",   "Ver tabla importación", 190);
+                AddButton("btnFecha", "Mantenimiento de Fecha", 70);
+                AddButton("btnImp", "Mantenimiento de Impuestos", 110);
+                AddButton("btnProc", "Importar y procesar", 150);
+                AddButton("btnTbl", "Ver tabla importación", 190);
 
-            _app.ItemEvent += App_ItemEvent;
-            _form.Visible = true;
+                _app.ItemEvent += App_ItemEvent;
+                _form.Visible = true;
+            }
+            catch (Exception ex)
+            {
+                _app.MessageBox("Error al crear form principal: " + ex.Message);
+            }
         }
 
         private void AddButton(string id, string caption, int top)
@@ -67,7 +71,6 @@ namespace PadronWtd.UI.Forms
                 switch (pVal.ItemUID)
                 {
                     case "btnFecha":
-
                         //try
                         //{
                         //    string xmlMenus = _app.Menus.GetAsXML();
@@ -80,46 +83,23 @@ namespace PadronWtd.UI.Forms
                         //{
                         //    _app.MessageBox("Error: " + ex.Message);
                         //}
+                        // Abre buscando el título exacto tal cual se ve en SAP
+                        ActivateMenuByTitle("Fechas de Procesamiento SALTA");
+                        break;
 
-                        //_app.MessageBox("Fecha");
-                        string menuId = "47618";
-                        if (_app.Menus.Exists(menuId))
-                        {
-                            _app.Menus.Item(menuId).Activate();
-                        }
-                        else
-                        {
-                            _app.MessageBox($"El menú con ID '{menuId}' no existe.");
-                        }
-                        break;
                     case "btnImp":
-                        // _app.MessageBox("Impuestos");
-                        string menuImpuestosId = "47619";
-                        if (_app.Menus.Exists(menuImpuestosId))
-                        {
-                            _app.Menus.Item(menuImpuestosId).Activate();
-                        }
-                        else
-                        {
-                            _app.MessageBox($"El menú con ID '{menuImpuestosId}' no existe.");
-                        }
+                        ActivateMenuByTitle("Parametros Padrón SALTA");
                         break;
+
                     case "btnProc":
                         OnImportarClick();
                         break;
+
                     case "btnTbl":
-                        string menuTblId = "47620";
-                        if (_app.Menus.Exists(menuTblId))
-                        {
-                            _app.Menus.Item(menuTblId).Activate();
-                        }
-                        else
-                        {
-                            _app.MessageBox($"El menú con ID '{menuTblId}' no existe.");
-                        }
+                        ActivateMenuByTitle("Padron Salta");
                         break;
+
                     default:
-                        _app.MessageBox($"Acción no implementada: {pVal.ItemUID}");
                         break;
                 }
             }
@@ -127,16 +107,67 @@ namespace PadronWtd.UI.Forms
 
         private void OnImportarClick()
         {
-            var _logger = SimpleServiceProvider.Get<ILogger>();
-
-            //_logger.Info("=== DEBUG ARRANCANDO ====");
-            //// var runner = new ImportRunner();
-            //var runner = new LeerPadronRunnerAddOn();
-            //runner.Run();
-            //_logger.Info("=== TERMINO  ====");
-
             var frmImportar = new FrmImportar(_app);
             frmImportar.CreateForm();
+        }
+
+        // --------------------------------------------------------------------------------------------
+        // NUEVOS MÉTODOS PARA ABRIR POR NOMBRE
+        // --------------------------------------------------------------------------------------------
+
+        private void ActivateMenuByTitle(string menuTitle)
+        {
+            try
+            {
+                _app.StatusBar.SetText($"Buscando menú '{menuTitle}'...", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
+
+                string menuId = FindMenuIdRecursive(_app.Menus, menuTitle);
+
+                if (!string.IsNullOrEmpty(menuId))
+                {
+                    _app.Menus.Item(menuId).Activate();
+                }
+                else
+                {
+                    _app.MessageBox($"No se encontró ningún menú con el nombre: '{menuTitle}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                _app.MessageBox($"Error al activar menú: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Busca recursivamente en la estructura de árbol de menús de SAP.
+        /// </summary>
+        private string FindMenuIdRecursive(SAPbouiCOM.Menus menus, string titleToFind)
+        {
+            for (int i = 0; i < menus.Count; i++)
+            {
+                try
+                {
+                    SAPbouiCOM.MenuItem item = menus.Item(i);
+                    if (item.String.Trim().Equals(titleToFind.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return item.UID;
+                    }
+                    if (item.Type == BoMenuType.mt_POPUP && item.SubMenus.Count > 0)
+                    {
+                        string foundId = FindMenuIdRecursive(item.SubMenus, titleToFind);
+                        if (!string.IsNullOrEmpty(foundId))
+                        {
+                            return foundId;
+                        }
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
+            return null;
         }
     }
 }
