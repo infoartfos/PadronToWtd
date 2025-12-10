@@ -63,8 +63,8 @@ namespace PadronWtd.UI.Services
                 if (string.IsNullOrEmpty(cuit)) continue;
 
                 // Mapeo seguro
-                string riesgo = cols.Length > 2 ? cols[2].Trim() : "";
-                string inscripcion = cols.Length > 3 ? cols[3].Trim() : "";
+                string inscripcion = cols.Length > 2 ? cols[2].Trim() : "";
+                string riesgo = cols.Length > 3 ? cols[3].Trim() : "";
 
                 list.Add(new PSaltaRecord
                 {

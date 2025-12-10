@@ -110,6 +110,7 @@ namespace PadronWtd.UI.Services
                                 taxEntry = 1; // Valor por defecto si viene vacío o no es número
                             }
                             int linea = _repository.GetNextLineId(taxEntry);
+
                             string riskFlag = MapRiskToFlag(record.U_Riesgo);
 
                             var execute = 4;
@@ -293,7 +294,7 @@ namespace PadronWtd.UI.Services
         {
             if (_impuestosCache == null) return new List<ImpuestoCacheItem>();
 
-            string key = $"{riesgo?.Trim().ToUpper()}_{inscripcion?.Trim().ToUpper()}";
+            string key = $"{inscripcion?.Trim().ToUpper()}_{riesgo?.Trim().ToUpper()}";
 
             if (_impuestosCache.TryGetValue(key, out List<ImpuestoCacheItem> items))
             {
