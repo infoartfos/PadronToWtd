@@ -20,20 +20,17 @@ namespace PadronWtd.UI.Services
 
         public async Task<int> ProcessImportAsync(string filePath, string year, string qValue)
         {
-            // 1. Validaciones previas
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
                 throw new FileNotFoundException("El archivo especificado no existe.", filePath);
 
             if (App.Company == null || !App.Company.Connected)
                 throw new InvalidOperationException("No hay conexión activa con DI API (App.Company es nulo).");
 
-            // 2. Lectura y Parsing (CPU Bound)
             List<PSaltaRecord> recordsToInsert = await Task.Run(() => ParseFile(filePath, year, qValue));
 
             if (recordsToInsert.Count == 0)
                 return 0;
 
-            // 3. Persistencia (IO Bound)
             var repository = new PSaltaRepository(App.Company);
             _logger.Info("Borrando registros anteriores " + qValue + " " + year);
             await repository.DeleteByAnioAndQAsync(qValue, year);
@@ -52,17 +49,15 @@ namespace PadronWtd.UI.Services
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
-                var cols = line.Split('\t'); // Asumimos tabulador como separador
+                var cols = line.Split('\t'); 
 
                 // Ignorar encabezados
                 if (cols.Length > 0 && cols[0].Trim().ToUpper().StartsWith("CUIT")) continue;
 
                 string cuit = cols.Length > 0 ? cols[0].Trim() : "";
 
-                // Validación mínima de datos
                 if (string.IsNullOrEmpty(cuit)) continue;
 
-                // Mapeo seguro
                 string inscripcion = cols.Length > 2 ? cols[2].Trim() : "";
                 string riesgo = cols.Length > 3 ? cols[3].Trim() : "";
 
