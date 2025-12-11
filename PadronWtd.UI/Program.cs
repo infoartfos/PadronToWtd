@@ -4,6 +4,7 @@ using PadronWtd.UI.Logging;
 using SAPbouiCOM;
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace PadronWtd.UI
 {
@@ -50,7 +51,16 @@ namespace PadronWtd.UI
                 }
 
                 App.SBO_Application = guiApi.GetApplication(-1);
-                App.Company = (SAPbobsCOM.Company)App.SBO_Application.Company.GetDICompany();
+                try
+                {
+                    App.Company = (SAPbobsCOM.Company)App.SBO_Application.Company.GetDICompany();
+                }
+                catch (Exception ex)
+                {
+                    App.SBO_Application.MessageBox("Error conectando DI API: " + ex.Message);
+                    // System.Windows.Forms.Application.Exit(); 
+                }
+
                 Menu MyMenu = new Menu();
                 MyMenu.AddMenuItems();
                 App.SBO_Application.MenuEvent += new _IApplicationEvents_MenuEventEventHandler(MyMenu.SBO_Application_MenuEvent);
@@ -71,20 +81,50 @@ namespace PadronWtd.UI
             switch (EventType)
             {
                 case SAPbouiCOM.BoAppEventTypes.aet_ShutDown:
-                    System.Windows.Forms.Application.Exit();
+                    TerminateAddon();
                     break;
                 case SAPbouiCOM.BoAppEventTypes.aet_CompanyChanged:
+                    TerminateAddon();
                     break;
                 case SAPbouiCOM.BoAppEventTypes.aet_FontChanged:
                     break;
                 case SAPbouiCOM.BoAppEventTypes.aet_LanguageChanged:
                     break;
                 case SAPbouiCOM.BoAppEventTypes.aet_ServerTerminition:
+                    TerminateAddon();
                     break;
                 default:
                     break;
             }
         }
+
+        private static void TerminateAddon()
+        {
+            try
+            {
+                if (App.Company != null && App.Company.Connected)
+                {
+                    App.Company.Disconnect();
+                    Marshal.ReleaseComObject(App.Company);
+                    App.Company = null;
+                }
+
+                if (App.SBO_Application != null)
+                {
+                    Marshal.ReleaseComObject(App.SBO_Application);
+                    App.SBO_Application = null;
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                System.Windows.Forms.Application.Exit();
+                Environment.Exit(0);
+            }
+        }
+
     }
 }
 

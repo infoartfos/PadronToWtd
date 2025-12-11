@@ -19,7 +19,7 @@ namespace PadronWtd.UI
                 );
 
             // Obtener menú "Modules"
-            oMenuItem = oMenus.Item(MenuConstants.ModulesMenuId);
+            oMenuItem = oMenus.Item(MenuConstants.FinanzasMenuId);
             oMenus = oMenuItem.SubMenus;
 
             // Crear menú raíz
