@@ -195,7 +195,7 @@ namespace PadronWtd.UI.Services
                     }
                 }
             });
-
+            progress.Report(100);
             await _contDateRepository.DeactivatePeriodAsync(year, qValue);
             result.RegistrosConError = errorCount;
             result.ProcesadosExitosos = result.TotalRegistros - result.RegistrosConError;

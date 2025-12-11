@@ -383,7 +383,7 @@ namespace PadronWtd.Repository.DI
             });
         }
 
-        public async Task BulkInsertAsync(List<PSaltaRecord> records)
+        public async Task BulkInsertAsync(List<PSaltaRecord> records, IProgress<int> progress = null)
         {
             await Task.Run(() =>
             {
@@ -412,6 +412,11 @@ namespace PadronWtd.Repository.DI
                         }
 
                         processed += batchSize;
+                        if (progress != null)
+                        {
+                            int percent = (int)((double)processed / totalRecords * 100);
+                            progress.Report(percent);
+                        }
                         _logger.Info("processed: " + processed + "  " + ( (processed * 100) /totalRecords) + "%  ");
                     }
                 }
@@ -485,7 +490,6 @@ namespace PadronWtd.Repository.DI
             try
             {
                 rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-                // Usamos IFNULL para que devuelva 0 si la tabla está vacía
                 string sql = "SELECT IFNULL(MAX(\"DocEntry\"), 0) FROM \"@PADRON_SALTA_IMP\"";
                 rs.DoQuery(sql);
 

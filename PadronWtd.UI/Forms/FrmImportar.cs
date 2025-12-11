@@ -246,21 +246,25 @@ namespace PadronWtd.UI.Forms
                 UpdateResultLabels("", "", "");
                 UpdateStatus("Leyendo y procesando archivo...");
 
-                int count = await _importService.ProcessImportAsync(filePath, year, qValue);
+                var importReporter = new Progress<int>(percent =>
+                {
+                    _application.StatusBar.SetText($"Importando ... {percent}%", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
+                });
+                int count = await _importService.ProcessImportAsync(filePath, year, qValue, importReporter);
 
                 if (count > 0)
                 {
                     UpdateStatus($"Importación completada: {count} registros. Iniciando proceso SAP...");
                     _application.StatusBar.SetText($"Importación completada. Iniciando proceso SAP...", BoMessageTime.bmt_Medium, BoStatusBarMessageType.smt_Success);
 
-                    var service = new ProcessInfoService();
+                    var importService = new ProcessInfoService();
 
                     var progressReporter = new Progress<int>(percent =>
                     {
                         _application.StatusBar.SetText($"Procesando... {percent}%", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
                     });
 
-                    ProcessResult resultado = await service.ProcessRecordsAsync(qValue, year, progressReporter);
+                    ProcessResult resultado = await importService.ProcessRecordsAsync(qValue, year, progressReporter);
 
                     // MOSTRAR RESULTADOS EN LAS 3 LÍNEAS
                     string txtTotal = $"Total Registros: {resultado.TotalRegistros}";

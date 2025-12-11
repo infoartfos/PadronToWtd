@@ -1,11 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
-using PadronWtd.Domain;
+﻿using PadronWtd.Domain;
 using PadronWtd.Repository.DI;
 using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace PadronWtd.UI.Services
 {
@@ -18,7 +19,7 @@ namespace PadronWtd.UI.Services
             _logger = SimpleServiceProvider.Get<ILogger>();
         }
 
-        public async Task<int> ProcessImportAsync(string filePath, string year, string qValue)
+        public async Task<int> ProcessImportAsync(string filePath, string year, string qValue, IProgress<int> progress = null)
         {
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
                 throw new FileNotFoundException("El archivo especificado no existe.", filePath);
@@ -31,11 +32,13 @@ namespace PadronWtd.UI.Services
             if (recordsToInsert.Count == 0)
                 return 0;
 
+            progress.Report(0);
             var repository = new PSaltaRepository(App.Company);
             _logger.Info("Borrando registros anteriores " + qValue + " " + year);
             await repository.DeleteByAnioAndQAsync(qValue, year);
             _logger.Info("terminó borrado registros anteriores ");
-            await repository.BulkInsertAsync(recordsToInsert);
+            await repository.BulkInsertAsync(recordsToInsert, progress);
+            progress.Report(100);
             return recordsToInsert.Count;
             
         }
