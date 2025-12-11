@@ -1000,5 +1000,36 @@ namespace PadronWtd.Repository.DI
             }
         }
 
+        public async Task<int> CountErrorsAsync(string qValue, string year)
+        {
+            return await Task.Run(() =>
+            {
+                Recordset rs = null;
+                try
+                {
+                    rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                    // Contamos registros que no estén en estado '20' (OK) ni '10' (Pendiente)
+                    // Asumiendo que '30', '40', '99' son errores. 
+                    // O si prefieres contar solo un estado específico, ajusta el WHERE.
+                    string query = $@"
+                            SELECT COUNT(*) 
+                            FROM ""@PADRON_SALTA_IMP"" 
+                            WHERE ""U_Anio"" = '{year}' 
+                            AND ""Name"" = '{qValue}'
+                            AND ""U_Estado"" NOT IN ('20', '10', 'Importado', 'Pendiente')";
+
+                    rs.DoQuery(query);
+
+                    if (!rs.EoF)
+                        return int.Parse(rs.Fields.Item(0).Value.ToString());
+
+                    return 0;
+                }
+                catch { return 0; }
+                finally { if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs); }
+            });
+        }
+
     }
 }

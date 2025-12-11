@@ -11,6 +11,8 @@ namespace PadronWtd.UI.Services
     public class PeriodosService
     {
         private readonly ContDateRepository _repository;
+        private readonly PSaltaRepository _padronRepository;
+
 
         public PeriodosService()
         {
@@ -18,24 +20,36 @@ namespace PadronWtd.UI.Services
                 throw new InvalidOperationException("DI API no conectada.");
 
             _repository = new ContDateRepository(App.Company);
+            _padronRepository = new PSaltaRepository(App.Company);
         }
 
         public async Task<List<ComboItem>> GetActivePeriodosAsync()
         {
             var rawData = await _repository.GetFechasAsync();
+            var activos = rawData.Where(r => r.U_Activo == "SI").ToList();
 
-            var result = rawData
-                .Where(r => r.U_Activo == "SI")
-                .Select(r => new ComboItem
+            var result = new List<ComboItem>();
+
+            foreach (var r in activos)
+            {
+                int errores = await _padronRepository.CountErrorsAsync(r.U_Periodo, r.Year);
+
+                string desc = $"{r.Year} {r.U_Periodo} ({r.U_Desde:dd/MM}-{r.U_Hasta:dd/MM})";
+                if (errores > 0)
                 {
-                    Value = r.Year + " "+ r.U_Periodo,
-                    Description = $"{r.Year} {r.U_Periodo} ({r.U_Desde:dd/MM}-{r.U_Hasta:dd/MM} )"
-                })
-                .OrderBy(x => x.Value) 
-                .ToList();
+                    desc += $" [⚠️ {errores} Errores]";
+                }
 
-            return result;
+                result.Add(new ComboItem
+                {
+                    Value = r.Year + " " + r.U_Periodo,
+                    Description = desc
+                });
+            }
+
+            return result.OrderBy(x => x.Value).ToList();
         }
+
 
         public async Task<(DateTime? Desde, DateTime? Hasta)> GetDatesAsync(string year, string qValue)
         {
