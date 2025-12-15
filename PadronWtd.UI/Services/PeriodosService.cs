@@ -26,7 +26,8 @@ namespace PadronWtd.UI.Services
         public async Task<List<ComboItem>> GetActivePeriodosAsync()
         {
             var rawData = await _repository.GetFechasAsync();
-            var activos = rawData.Where(r => r.U_Activo == "SI").ToList();
+            var activos = rawData.ToList();
+            // var activos = rawData.Where(r => r.U_Activo == "SI").ToList();
 
             var result = new List<ComboItem>();
 
@@ -38,13 +39,22 @@ namespace PadronWtd.UI.Services
                 if (errores > 0)
                 {
                     desc += $" [⚠️ {errores} Errores]";
-                }
-
-                result.Add(new ComboItem
+                    result.Add(new ComboItem
+                    {
+                        Value = r.Year + " " + r.U_Periodo,
+                        Description = desc
+                    });
+                } else
                 {
-                    Value = r.Year + " " + r.U_Periodo,
-                    Description = desc
-                });
+                    if (r.U_Activo == "SI")
+                    {
+                        result.Add(new ComboItem
+                        {
+                            Value = r.Year + " " + r.U_Periodo,
+                            Description = desc
+                        });
+                    }
+                }
             }
 
             return result.OrderBy(x => x.Value).ToList();

@@ -1,4 +1,6 @@
-﻿namespace PadronWtd.UI.Logging
+﻿using System;
+
+namespace PadronWtd.UI.Logging
 {
     public interface ILogger
     {

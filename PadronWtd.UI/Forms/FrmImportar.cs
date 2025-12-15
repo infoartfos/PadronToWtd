@@ -1,5 +1,6 @@
 ﻿using PadronWtd.Domain;
 using PadronWtd.UI.DI;
+using PadronWtd.Repository.DI;
 using PadronWtd.UI.Helpers;
 using PadronWtd.UI.Logging;
 using PadronWtd.UI.Services;
@@ -19,6 +20,7 @@ namespace PadronWtd.UI.Forms
         private const string BtnBrowseID = "btnBrowse";
         private const string BtnImportID = "btnImport";
         private const string LblResumenID = "lblResumen";
+        private const string BtnReprocessID = "btnReproc";
         private const string LblProgressID = "lblProgr";
         private const string LblLine1ID = "lblLine1";
         private const string LblLine2ID = "lblLine2";
@@ -28,6 +30,9 @@ namespace PadronWtd.UI.Forms
         private readonly ILogger _logger;
         private readonly FileImportService _importService;
         private readonly PeriodosService _periodosService;
+        private readonly PSaltaRepository _repository;
+        private readonly SAPbobsCOM.Company _company;
+
 
         // Cola para comunicación entre el hilo de diálogo (STA) y la UI de SAP
         private readonly ConcurrentQueue<string> _filePathQueue = new ConcurrentQueue<string>();
@@ -40,7 +45,15 @@ namespace PadronWtd.UI.Forms
             _application = application;
             _logger = SimpleServiceProvider.Get<ILogger>();
             _importService = new FileImportService();
-            _periodosService = new PeriodosService(); 
+            _periodosService = new PeriodosService();
+
+            _company = App.Company;
+            if (_company == null)
+            {
+                throw new InvalidOperationException("La conexión DI API (App.Company) no está inicializada.");
+            }
+
+            _repository = new PSaltaRepository(_company); ;
         }
 
         public void CreateForm()
@@ -101,6 +114,11 @@ namespace PadronWtd.UI.Forms
             top += spacing * 2;
             AddButton(BtnImportID, "Importar y Procesar", left + lblWidth, top, 200);
 
+            top += spacing + 10;
+            var btnReproc = AddButton(BtnReprocessID, "Reprocesar Errores", left + lblWidth, top, 200);
+            btnReproc.Item.Visible = false;
+
+
             // 4. Feedback
             top += spacing * 2;
             var lblRes = AddLabel(LblResumenID, "", left, top);
@@ -159,6 +177,7 @@ namespace PadronWtd.UI.Forms
                         try
                         {
                             cmb.Select(0, BoSearchKey.psk_Index);
+                            HandleComboSelect();
                         }
                         catch { }
                     }
@@ -181,6 +200,11 @@ namespace PadronWtd.UI.Forms
                 CheckFileQueue();
             }
 
+            if (pVal.EventType == BoEventTypes.et_COMBO_SELECT && !pVal.BeforeAction && pVal.ItemUID == CmbPeriodoID)
+            {
+                HandleComboSelect();
+            }
+
             if (pVal.EventType == BoEventTypes.et_ITEM_PRESSED && !pVal.BeforeAction)
             {
                 switch (pVal.ItemUID)
@@ -191,9 +215,119 @@ namespace PadronWtd.UI.Forms
                     case BtnImportID:
                         HandleImportClick();
                         break;
+                    case BtnReprocessID:
+                        HandleReprocessClick();
+                        break;
                 }
             }
         }
+
+        private void HandleComboSelect()
+        {
+            try
+            {
+                string valPeriodo = _cmb.Value;
+                if (string.IsNullOrEmpty(valPeriodo)) return;
+
+                // Parsear Año y Q (Ej: "2025 Q1")
+                var parts = valPeriodo.Split(' ');
+                if (parts.Length > 1)
+                {
+                    string year = parts[0];
+                    string qValue = parts[1];
+
+                    // Verificar errores en background
+                    _ = CheckErrorsAndToggleBtnAsync(year, qValue);
+                }
+            }
+            catch { }
+        }
+
+        private async Task CheckErrorsAndToggleBtnAsync(string year, string qValue)
+        {
+            try
+            {
+                if (_repository == null) return;
+
+                int errors = await _repository.CountErrorsAsync(qValue, year);
+
+                SafeUpdateUI(() =>
+                {
+                    // Mostrar botón solo si hay errores (> 0)
+                    _oForm.Items.Item(BtnReprocessID).Visible = (errors > 0);
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error chequeando errores", ex);
+            }
+        }
+
+        // --- LÓGICA DEL BOTÓN REPROCESAR ---
+        private void HandleReprocessClick()
+        {
+            string valPeriodo = _cmb.Value;
+            var parts = valPeriodo.Split(' ');
+            if (parts.Length < 2) return;
+
+            string year = parts[0];
+            string qValue = parts[1];
+
+            if (_application.MessageBox($"¿Desea reprocesar SOLO los registros con error para {year} - {qValue}?", 1, "Sí", "No") != 1)
+                return;
+
+            _ = RunReprocessAsync(year, qValue);
+        }
+
+        private async Task RunReprocessAsync(string year, string qValue)
+        {
+            try
+            {
+                SetUIBusy(true);
+                UpdateResultLabels("", "", "");
+                UpdateStatus("Reseteando registros con error...");
+
+                // 1. Resetear estados en la base de datos (Volver a '10')
+                //if (_repository != null)
+                //{
+                //    await _repository.ResetErrorRecordsAsync(qValue, year);
+                //}
+
+                // 2. Ejecutar el servicio de procesamiento (Igual que en el Import, pero sin leer CSV)
+                UpdateStatus("Reprocesando registros en SAP...");
+
+                var service = new ProcessInfoService();
+                var progressReporter = new Progress<int>(pct =>
+                {
+                    _application.StatusBar.SetText($"Reprocesando... {pct}%", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
+                });
+
+                // El servicio automáticamente busca los que están en estado '10' (que acabamos de resetear)
+                ProcessResult resultado = await service.ProcessRecordsAsync(qValue, year, progressReporter);
+
+                string txtTotal = $"Registros Re-intentados: {resultado.TotalRegistros}";
+                string txtOk = $"Procesados OK: {resultado.ProcesadosExitosos}";
+                string txtError = $"Persisten con Error: {resultado.RegistrosConError}";
+
+                UpdateResultLabels(txtTotal, txtOk, txtError);
+                _application.MessageBox($"Reprocesamiento Finalizado.\n{txtOk}\n{txtError}");
+
+                // Actualizar visibilidad del botón (si ya no hay errores, se oculta)
+                _ = CheckErrorsAndToggleBtnAsync(year, qValue);
+                // Actualizar descripciones del combo
+                _ = LoadPeriodosAsync(_cmb);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error en reprocesamiento", ex);
+                _application.MessageBox("Error: " + ex.Message);
+            }
+            finally
+            {
+                SetUIBusy(false);
+            }
+        }
+
 
         private void HandleBrowseClick()
         {
@@ -314,6 +448,7 @@ namespace PadronWtd.UI.Forms
                 _oForm.Items.Item(BtnImportID).Enabled = !busy;
                 _oForm.Items.Item(BtnBrowseID).Enabled = !busy;
                 _oForm.Items.Item(CmbPeriodoID).Enabled = !busy;
+                _oForm.Items.Item(BtnReprocessID).Enabled = !busy;
             });
         }
 

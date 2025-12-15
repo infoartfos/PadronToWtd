@@ -273,7 +273,7 @@ namespace PadronWtd.Repository.DI
                         FROM ""{DB_TABLE_NAME}"" 
                         WHERE ""U_Anio"" = '{anio}'
                         AND  ""Name"" = '{q_value}'
-                        AND ""U_Estado"" = 'Importado'
+                        AND (""U_Estado"" = 'Importado' OR ""U_Estado"" = '10' OR ""U_Estado"" = 'Error' OR ""U_Estado"" = '40')
                         ORDER BY ""Code"" ASC";
                     _logger.Info($"Query : {query}");
                     recordset.DoQuery(query);
@@ -1000,6 +1000,44 @@ namespace PadronWtd.Repository.DI
             }
         }
 
+        // -----------------------------------------------------------------------
+        // RESET ERRORS: Pone en estado '10' los registros con error para un Q/Año
+        // -----------------------------------------------------------------------
+        public async Task ResetErrorRecordsAsync(string qValue, string year)
+        {
+            await Task.Run(() =>
+            {
+                Recordset rs = null;
+                try
+                {
+                    rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                    // Actualizamos a '10' (Pendiente) todo lo que NO sea '20' (Exitoso) ni '10' (Ya pendiente)
+                    // Esto incluye '30', '40', '99', etc.
+                    string query = $@"
+                        UPDATE ""{DB_TABLE_NAME}"" 
+                        SET ""U_Estado"" = '10', 
+                            ""U_Notas"" = 'Reprocesamiento solicitado',
+                            ""U_Procesado"" = NULL
+                        WHERE ""U_Anio"" = '{year}' 
+                        AND ""Name"" = '{qValue}' 
+                        AND ""U_Estado"" NOT IN ('20', '10')";
+                    _logger.Info(query);
+                    rs.DoQuery(query);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error en ResetErrorRecordsAsync: {ex.Message}");
+                    throw;
+                }
+                finally
+                {
+                    if (rs != null) Marshal.ReleaseComObject(rs);
+                }
+            });
+        }
+
+
         public async Task<int> CountErrorsAsync(string qValue, string year)
         {
             return await Task.Run(() =>
@@ -1017,12 +1055,16 @@ namespace PadronWtd.Repository.DI
                             FROM ""@PADRON_SALTA_IMP"" 
                             WHERE ""U_Anio"" = '{year}' 
                             AND ""Name"" = '{qValue}'
-                            AND ""U_Estado"" NOT IN ('20', '10', 'Importado', 'Pendiente')";
-
+                            AND ""U_Estado"" NOT IN ('30', '20', '10', 'No Encontrado', 'Importado', 'Pendiente')";
+                    _logger.Info(query);
                     rs.DoQuery(query);
 
                     if (!rs.EoF)
-                        return int.Parse(rs.Fields.Item(0).Value.ToString());
+                    {
+                        int count = int.Parse(rs.Fields.Item(0).Value.ToString());
+                        _logger.Info(rs.Fields.Item(0).Value.ToString());
+                        return count;
+                    }
 
                     return 0;
                 }
