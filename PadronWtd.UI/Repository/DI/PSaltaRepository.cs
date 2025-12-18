@@ -530,12 +530,12 @@ namespace PadronWtd.Repository.DI
                     string updateQuery = $@"
                         UPDATE ""{DB_TABLE_NAME}""
                         SET 
-                            ""U_Estado"" = 'No Encontrado',
+                            ""U_Estado"" = '30',
                             ""U_Procesado"" = TO_VARCHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI'),
                             ""U_Notas"" = 'Proveedor No Existe (pl)'
                         WHERE ""U_Anio"" = '{year}'
                         AND ""Name"" = '{qValue}'
-                        AND ""U_Estado"" = 'Importado' 
+                        AND (""U_Estado"" = 'Importado' OR ""U_Estado"" = '10' )
                         AND NOT EXISTS (
                             SELECT 1 
                             FROM ""OCRD"" T0 
