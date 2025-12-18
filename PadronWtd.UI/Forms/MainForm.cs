@@ -14,6 +14,9 @@ namespace PadronWtd.UI.Forms
         private readonly Application _app;
         private Form _form;
 
+        // UID constante para identificar este formulario unívocamente
+        private const string FormUID = "frmPadron";
+
         public MainForm(Application app)
         {
             _app = app;
@@ -21,6 +24,8 @@ namespace PadronWtd.UI.Forms
             string apiUrl = AppSettings.ApiUrl;
 
             Console.WriteLine("Title  : " + text);
+
+            // Llamamos a la creación
             CreateForm();
         }
 
@@ -28,8 +33,30 @@ namespace PadronWtd.UI.Forms
         {
             try
             {
+                // -----------------------------------------------------------
+                // PATRÓN SINGLETON: Verificar si el form ya existe
+                // -----------------------------------------------------------
+                try
+                {
+                    // Intentamos obtener el formulario por su ID
+                    _form = _app.Forms.Item(FormUID);
+
+                    // Si no falla la línea anterior, significa que existe.
+                    // Lo traemos al frente y salimos.
+                    _form.Select();
+                    return;
+                }
+                catch
+                {
+                    // Si cae aquí, el formulario no existe (SAP lanza excepción).
+                    // Continuamos con la creación normal.
+                }
+
+                // -----------------------------------------------------------
+                // CREACIÓN DEL FORMULARIO
+                // -----------------------------------------------------------
                 FormCreationParams cp = (FormCreationParams)_app.CreateObject(BoCreatableObjectType.cot_FormCreationParams);
-                cp.UniqueID = "frmPadron";
+                cp.UniqueID = FormUID;
                 cp.FormType = "frmPadron";
                 cp.BorderStyle = BoFormBorderStyle.fbs_Fixed;
 
@@ -66,29 +93,18 @@ namespace PadronWtd.UI.Forms
         private void App_ItemEvent(string FormUID, ref ItemEvent pVal, out bool BubbleEvent)
         {
             BubbleEvent = true;
-            if (pVal.EventType == BoEventTypes.et_ITEM_PRESSED && !pVal.BeforeAction && FormUID == "frmPadron")
+
+            // Validamos que el evento sea para ESTE formulario
+            if (pVal.EventType == BoEventTypes.et_ITEM_PRESSED && !pVal.BeforeAction && FormUID == MainForm.FormUID)
             {
                 switch (pVal.ItemUID)
                 {
                     case "btnFecha":
-                        //try
-                        //{
-                        //    string xmlMenus = _app.Menus.GetAsXML();
-                        //    string appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "PadronWtd");
-                        //    string menuFile = Path.Combine(appData, "SapMenus.xml");
-                        //    System.IO.File.WriteAllText(menuFile, xmlMenus);
-                        //    _app.MessageBox("Menús exportados a " + menuFile);
-                        //}
-                        //catch (Exception ex)
-                        //{
-                        //    _app.MessageBox("Error: " + ex.Message);
-                        //}
-                        // Abre buscando el título exacto tal cual se ve en SAP
-                        ActivateMenuByTitle("Fechas de Procesamiento SALTA");
+                        ActivateMenuByTitle("Fechas de Procesamiento SALTA", "Fechas de Procesamiento");
                         break;
 
                     case "btnImp":
-                        ActivateMenuByTitle("Parametros Padrón SALTA");
+                        ActivateMenuByTitle("Parametros Padrón SALTA", "Parametros Padrón");
                         break;
 
                     case "btnProc":
@@ -96,7 +112,7 @@ namespace PadronWtd.UI.Forms
                         break;
 
                     case "btnTbl":
-                        ActivateMenuByTitle("Padron Salta");
+                        ActivateMenuByTitle("Padron Salta", "Padron Salta");
                         break;
 
                     default:
@@ -107,18 +123,27 @@ namespace PadronWtd.UI.Forms
 
         private void OnImportarClick()
         {
+            // FrmImportar ya debería tener su propia lógica Singleton en su método CreateForm
             var frmImportar = new FrmImportar(_app);
             frmImportar.CreateForm();
         }
 
         // --------------------------------------------------------------------------------------------
-        // NUEVOS MÉTODOS PARA ABRIR POR NOMBRE
+        // NUEVOS MÉTODOS PARA ABRIR POR NOMBRE (CON CONTROL DE DUPLICADOS)
         // --------------------------------------------------------------------------------------------
 
-        private void ActivateMenuByTitle(string menuTitle)
+        private void ActivateMenuByTitle(string menuTitle, string windowTitle)
         {
             try
             {
+                // 1. Verificar si ya hay un formulario abierto con ese título
+                if (SelectFormByTitle(menuTitle, windowTitle))
+                {
+                    // Si ya estaba abierto y lo seleccionamos, no hacemos nada más.
+                    return;
+                }
+
+                // 2. Si no estaba abierto, buscamos el menú y lo activamos
                 _app.StatusBar.SetText($"Buscando menú '{menuTitle}'...", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
 
                 string menuId = FindMenuIdRecursive(_app.Menus, menuTitle);
@@ -139,8 +164,32 @@ namespace PadronWtd.UI.Forms
         }
 
         /// <summary>
-        /// Busca recursivamente en la estructura de árbol de menús de SAP.
+        /// Busca si existe un formulario abierto con el título exacto y le da foco.
         /// </summary>
+        private bool SelectFormByTitle(string title, string secondary_title)
+        {
+            try
+            {
+                // Recorremos la colección de formularios abiertos
+                for (int i = 0; i < _app.Forms.Count; i++)
+                {
+                    var frm = _app.Forms.Item(i);
+                    string titulo = frm.Title.Trim();
+                    if (titulo.Equals(title.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                        secondary_title.Equals(titulo))
+                    {
+                        frm.Select(); // Traer al frente
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignorar errores al iterar forms
+            }
+            return false;
+        }
+
         private string FindMenuIdRecursive(SAPbouiCOM.Menus menus, string titleToFind)
         {
             for (int i = 0; i < menus.Count; i++)
@@ -148,10 +197,12 @@ namespace PadronWtd.UI.Forms
                 try
                 {
                     SAPbouiCOM.MenuItem item = menus.Item(i);
+
                     if (item.String.Trim().Equals(titleToFind.Trim(), StringComparison.OrdinalIgnoreCase))
                     {
                         return item.UID;
                     }
+
                     if (item.Type == BoMenuType.mt_POPUP && item.SubMenus.Count > 0)
                     {
                         string foundId = FindMenuIdRecursive(item.SubMenus, titleToFind);
