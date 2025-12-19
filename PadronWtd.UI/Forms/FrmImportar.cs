@@ -41,6 +41,16 @@ namespace PadronWtd.UI.Forms
         private readonly ConcurrentQueue<string> _filePathQueue = new ConcurrentQueue<string>();
         private Form _oForm;
         private ComboBox _cmb;
+        private SAPbouiCOM.Button _btnProc;
+
+        private bool _isDialogOpen = false;
+        private readonly object _dialogLock = new object();
+
+        private bool _isProcessOpen = false;
+        private readonly object _processLock = new object();
+
+        private bool _isReprocessOpen = false;
+        private readonly object _reprocessLock = new object();
 
         // Timer para revisar la cola de archivos (Solución al problema de foco)
         private System.Timers.Timer _uiTimer;
@@ -115,7 +125,8 @@ namespace PadronWtd.UI.Forms
 
             // 3. Botones
             top += spacing * 2;
-            AddButton(BtnImportID, "Importar y Procesar", left + lblWidth, top, 200);
+            this._btnProc = AddButton(BtnImportID, "Importar y Procesar", left + lblWidth, top, 200);
+            this._btnProc.Item.Visible = false;
 
             top += spacing + 10;
             var btnReproc = AddButton(BtnReprocessID, "Reprocesar Errores", left + lblWidth, top, 200);
@@ -223,6 +234,12 @@ namespace PadronWtd.UI.Forms
 
         private void HandleBrowseClick()
         {
+            lock (_dialogLock)
+            {
+                if (_isDialogOpen) return;
+                _isDialogOpen = true;     
+            }
+
             var t = new Thread(() =>
             {
                 try
@@ -238,6 +255,7 @@ namespace PadronWtd.UI.Forms
                         if (dialog.ShowDialog(wrapper) == System.Windows.Forms.DialogResult.OK)
                         {
                             _filePathQueue.Enqueue(dialog.FileName);
+                            _btnProc.Item.Visible = true;
                         }
                     }
                 }
@@ -245,13 +263,27 @@ namespace PadronWtd.UI.Forms
                 {
                     _logger.Error("Error en FileDialog", ex);
                 }
+                finally
+                {
+                    lock (_dialogLock)
+                    {
+                        _isDialogOpen = false;
+                    }
+                }
             });
+
             t.SetApartmentState(ApartmentState.STA);
             t.Start();
         }
 
         private void HandleImportClick()
         {
+            lock (_processLock)
+            {
+                if (_isProcessOpen) return;
+                _isProcessOpen = true;
+            }
+
             try
             {
                 string filePath = ((EditText)_oForm.Items.Item(TxtArchivoID).Specific).Value;
@@ -282,10 +314,23 @@ namespace PadronWtd.UI.Forms
             {
                 _isActionRunning = false;
             }
+            finally
+            {
+                lock (_processLock)
+                {
+                    _isProcessOpen = false;
+                }
+            }
         }
 
         private void HandleReprocessClick()
         {
+            lock (_reprocessLock)
+            {
+                if (_isReprocessOpen) return;
+                _isReprocessOpen = true;
+            }
+
             try
             {
                 string valPeriodo = _cmb.Value;
@@ -304,6 +349,13 @@ namespace PadronWtd.UI.Forms
             catch
             {
                 _isActionRunning = false;
+            }
+            finally
+            {
+                lock (_reprocessLock)
+                {
+                    _isReprocessOpen = false;
+                }
             }
         }
 
