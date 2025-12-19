@@ -123,9 +123,7 @@ namespace PadronWtd.UI.Forms
 
         private void OnImportarClick()
         {
-            // FrmImportar ya debería tener su propia lógica Singleton en su método CreateForm
-            var frmImportar = new FrmImportar(_app);
-            frmImportar.CreateForm();
+            FrmImportar.Show(_app);
         }
 
         // --------------------------------------------------------------------------------------------

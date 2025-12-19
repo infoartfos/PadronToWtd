@@ -16,6 +16,7 @@ namespace PadronWtd.UI.Forms
 {
     public class FrmImportar
     {
+        private static FrmImportar _instance;
         // --- Constantes de UI ---
         private const string FormUID = "FrmImp";
         private const string CmbPeriodoID = "cmbPeriodo";
@@ -58,7 +59,7 @@ namespace PadronWtd.UI.Forms
         // Bandera para evitar doble clic o ejecución simultánea
         private bool _isActionRunning = false;
 
-        public FrmImportar(SAPbouiCOM.Application application)
+        private FrmImportar(SAPbouiCOM.Application application)
         {
             _application = application;
             _logger = SimpleServiceProvider.Get<ILogger>();
@@ -68,10 +69,48 @@ namespace PadronWtd.UI.Forms
             _company = App.Company;
             if (_company == null)
             {
-                throw new InvalidOperationException("La conexión DI API (App.Company) no está inicializada.");
+                throw new InvalidOperationException("La conexión DI API no está inicializada.");
             }
 
             _repository = new PSaltaRepository(_company);
+        }
+
+        public static void Show(SAPbouiCOM.Application app)
+        {
+            // Si la instancia no existe, la creamos
+            if (_instance == null)
+            {
+                _instance = new FrmImportar(app);
+
+                // Suscribimos eventos UNA SOLA VEZ al crear la instancia
+                _instance._application.ItemEvent += _instance.SBO_Application_ItemEvent;
+            }
+
+            // Llamamos a la lógica interna para mostrar/crear la ventana visual
+            _instance.EnsureFormVisible();
+        }
+
+        // Renombrado de CreateForm a EnsureFormVisible para claridad
+        private void EnsureFormVisible()
+        {
+            try
+            {
+                // 1. Verificar si la ventana visual ya existe en SAP
+                try
+                {
+                    var existingForm = _application.Forms.Item(FormUID);
+                    existingForm.Select(); // Traer al frente
+                    return; // Ya existe, no hacemos nada más
+                }
+                catch { }
+
+                // 2. Si no existe, la dibujamos
+                BuildUserInterface();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error al abrir formulario", ex);
+            }
         }
 
         public void CreateForm()
@@ -176,13 +215,13 @@ namespace PadronWtd.UI.Forms
             BubbleEvent = true;
 
             if (FormUID != FrmImportar.FormUID) return;
-
-            // Detener timer al cerrar form para liberar recursos
+            
             if (pVal.EventType == BoEventTypes.et_FORM_CLOSE && !pVal.BeforeAction)
             {
-                StopTimer();
+                DisposeInstance();
                 return;
             }
+
 
             // PROTECCIÓN: Si ya hay una acción corriendo, ignoramos nuevos clics (excepto Browse)
             if (_isActionRunning && pVal.EventType == BoEventTypes.et_ITEM_PRESSED && !pVal.BeforeAction)
@@ -218,13 +257,29 @@ namespace PadronWtd.UI.Forms
             }
         }
 
-        private void StopTimer()
+        private void DisposeInstance()
         {
-            if (_uiTimer != null)
+            try
             {
-                _uiTimer.Stop();
-                _uiTimer.Dispose();
-                _uiTimer = null;
+                // Detener Timer
+                if (_uiTimer != null)
+                {
+                    _uiTimer.Stop();
+                    _uiTimer.Dispose();
+                    _uiTimer = null;
+                }
+
+                // Desuscribir eventos para evitar fugas de memoria
+                _application.ItemEvent -= SBO_Application_ItemEvent;
+            }
+            catch { }
+            finally
+            {
+                // Nulificar la instancia estática para permitir crear una nueva luego
+                _instance = null;
+
+                // Forzar limpieza de memoria (Opcional, útil si manejas muchos datos)
+                GC.Collect();
             }
         }
 
