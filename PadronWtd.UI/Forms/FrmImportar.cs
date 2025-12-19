@@ -43,6 +43,7 @@ namespace PadronWtd.UI.Forms
         private Form _oForm;
         private ComboBox _cmb;
         private SAPbouiCOM.Button _btnProc;
+        private SAPbouiCOM.Button _btnReproc;
 
         private bool _isDialogOpen = false;
         private readonly object _dialogLock = new object();
@@ -167,9 +168,9 @@ namespace PadronWtd.UI.Forms
             this._btnProc = AddButton(BtnImportID, "Importar y Procesar", left + lblWidth, top, 200);
             this._btnProc.Item.Visible = false;
 
-            top += spacing + 10;
-            var btnReproc = AddButton(BtnReprocessID, "Reprocesar Errores", left + lblWidth, top, 200);
-            btnReproc.Item.Visible = false;
+            // top += spacing + 10; En el mismo lugar que el anterior
+            _btnReproc = AddButton(BtnReprocessID, "Reprocesar Errores", left + lblWidth, top, 200);
+            _btnReproc.Item.Visible = false;
 
             // 4. Resultados
             top += spacing;
@@ -188,6 +189,13 @@ namespace PadronWtd.UI.Forms
         }
 
         // --- TIMER PARA CHECK DE ARCHIVOS ---
+
+        private void changedPeriodo()
+        {
+            _btnProc.Item.Visible = false;
+            _btnProc.Item.Visible = true;
+        }
+
         private void StartQueueTimer()
         {
             if (_uiTimer == null)
@@ -310,7 +318,6 @@ namespace PadronWtd.UI.Forms
                         if (dialog.ShowDialog(wrapper) == System.Windows.Forms.DialogResult.OK)
                         {
                             _filePathQueue.Enqueue(dialog.FileName);
-                            _btnProc.Item.Visible = true;
                         }
                     }
                 }
@@ -470,7 +477,7 @@ namespace PadronWtd.UI.Forms
                     await _repository.ResetErrorRecordsAsync(qValue, year);
                 }
 
-                await RunSapProcessing(year, qValue);
+                await RunSapReprocessing(year, qValue);
             }
             catch (Exception ex)
             {
@@ -507,6 +514,31 @@ namespace PadronWtd.UI.Forms
 
             _application.MessageBox($"Proceso Finalizado.\n{txtTotal}\n{txtOk}\n{txtError}");
         }
+
+        private async Task RunSapReprocessing(string year, string qValue)
+        {
+            UpdateStatus("Procesando información en SAP...");
+
+            var service = new ProcessInfoService();
+            var progressReporter = new Progress<int>(percent =>
+            {
+                _application.StatusBar.SetText($"Reprocesando SAP... {percent}%", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
+            });
+
+            ProcessResult resultado = await service.ProcessRecordsAsync(qValue, year, progressReporter);
+
+            string txtTotal = $"Exitosos: {resultado.TotalRegistros}";
+            string txtOk = $"Procesados: {(-1) * resultado.ProcesadosExitosos}";
+            string txtError = $"Errores: {resultado.RegistrosConError}";
+
+            UpdateResultLabels(txtTotal, txtOk, txtError);
+
+            await CheckErrorsAndToggleBtnAsync(year, qValue);
+            _ = LoadPeriodosAsync(_cmb);
+
+            _application.MessageBox($"Proceso Finalizado.\n{txtTotal}\n{txtOk}\n{txtError}");
+        }
+
 
         // --------------------------------------------------------------------------------------------
         // HELPERS
@@ -565,7 +597,17 @@ namespace PadronWtd.UI.Forms
 
                 SafeUpdateUI(() =>
                 {
-                    try { _oForm.Items.Item(BtnReprocessID).Visible = (errors > 0); } catch { }
+                    try 
+                    { 
+                        _oForm.Items.Item(BtnReprocessID).Visible = (errors > 0);
+
+                        _oForm.Items.Item(BtnImportID).Visible = (errors == 0);
+                        _oForm.Items.Item(BtnBrowseID).Visible = (errors == 0);
+                        _oForm.Items.Item(TxtArchivoID).Visible = (errors == 0);
+                        _oForm.Items.Item("lblFile").Visible = (errors == 0);
+                    } catch 
+                    {
+                    }
                 });
             }
             catch (Exception ex) { _logger.Error("Error chequeando errores", ex); }
