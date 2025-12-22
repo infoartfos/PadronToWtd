@@ -10,7 +10,7 @@
               OnDemand=""
               OnPremise=""
               ExtName="PadronWtd"
-              ExtVersion="1.0.2"
+              ExtVersion="1.0.4"
               Contdata=""
               Partner="Contreras"
               DBType="HANA"
@@ -21,19 +21,12 @@
 		</SBOCompatibility>
 	</Validity>
 	<Configuration>
-		<Repository>
-			<Properties />
-		</Repository>
-		<Deployment>
-			<Properties />
-		</Deployment>
-		<Assignment>
-			<Properties />
-		</Assignment>
+		<Repository />
+		<Deployment />
+		<Assignment />
 	</Configuration>
 	<Addons>
 		<Addon Name="PadronWtd" Group="" ForceFlag="" Visible="" AutoAssign="" SelfUpgrd="">
-			<!-- CONFIGURACION 32 BITS -->
 			<x86 AddonExe="PadronWtd.UI.exe" AddonSig="" ExeDir="x86">
 				<Installation>
 					<Files>
@@ -56,7 +49,6 @@
 					</Files>
 				</Uninstallation>
 			</x86>
-			<!-- CONFIGURACION 64 BITS -->
 			<x64 AddonExe="PadronWtd.UI.exe" AddonSig="" ExeDir="x64">
 				<Installation>
 					<Files>
@@ -81,12 +73,4 @@
 			</x64>
 		</Addon>
 	</Addons>
-	<XApps>
-		<XApp Name="" Path="" FileName="" />
-	</XApps>
-	<UDQs>
-		<UDQ udqname="">
-			<Hana FileName="" />
-		</UDQ>
-	</UDQs>
 </AddOnRegData>

@@ -2,15 +2,10 @@
 <Extension xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"
            Name="PadronWtd"
            Vendor="Contreras"
-           Version="1.0.2"
+           Version="1.0.4"
            Prerequisite="None"
            ConfigFile="PadronWtd.UI.exe.config">
 	<SupportPlatform>
-		<!-- Plataforma 32 Bits -->
-		<Platform Name="x86">
-			<Executable Name="x86\PadronWtd.UI.exe" />
-		</Platform>
-		<!-- Plataforma 64 Bits -->
 		<Platform Name="x64">
 			<Executable Name="x64\PadronWtd.UI.exe" />
 		</Platform>
