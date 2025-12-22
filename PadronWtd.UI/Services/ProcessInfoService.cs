@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using static System.Runtime.CompilerServices.RuntimeHelpers;
+using System.Configuration;
 
 namespace PadronWtd.UI.Services
 {
@@ -20,22 +21,19 @@ namespace PadronWtd.UI.Services
         private readonly ContDateRepository _contDateRepository;
         private readonly Company _company;
 
-        // CORRECCIÓN 1: Definir correctamente el tipo del diccionario
         private Dictionary<string, List<ImpuestoCacheItem>> _impuestosCache;
 
-        public ProcessInfoService()
+        public ProcessInfoService(bool forceServiceUser = true)
         {
             _logger = SimpleServiceProvider.Get<ILogger>();
 
-            if (App.Company == null || !App.Company.Connected)
-                throw new InvalidOperationException("No hay conexión con DI API.");
-
-            _company = App.Company;
+            _company = SapConnectionManager.Instance.GetCompany(forceServiceUser);
             _repository = new PSaltaRepository(_company);
             _configRepository = new SaltaConfigRepository(_company);
             _contDateRepository = new ContDateRepository(_company);
         }
 
+        
         public async Task<ProcessResult> ProcessRecordsAsync(string qValue, string year, IProgress<int> progress = null)
         {
             _logger.Info($"Iniciando procesamiento para {year} - {qValue}...");

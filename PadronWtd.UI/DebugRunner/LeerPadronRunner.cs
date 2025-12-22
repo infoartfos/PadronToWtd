@@ -32,7 +32,7 @@ namespace PadronWtd.DebugRunner
                 oCompany = new Company();
 
                 oCompany.DbServerType = BoDataServerTypes.dst_HANADB;
-                oCompany.Server = "hanadb1:30013";  // Si cambio esto no hay cambios,   con xxxx tambien da  ERROR DE CONEXIÓN (-132): Error during SBO user authentication
+                oCompany.Server = "hanab1:30013";  // Si cambio esto no hay cambios,   con xxxx tambien da  ERROR DE CONEXIÓN (-132): Error during SBO user authentication
 
                 oCompany.LicenseServer = "hanab1:40000";
                 // oCompany.SLDServer = "hanab1:40000"; // Si descomento da error ERROR DE CONEXIÓN(100000060): B1 License Error Unknown error #100000060
@@ -44,6 +44,8 @@ namespace PadronWtd.DebugRunner
                 // oCompany.CompanyDB = "NDB";           // ERROR DE CONEXIÓN (100000060): B1 License Error Unknown error #100000060
                 // oCompany.CompanyDB = "SBO_COMMON";    // ERROR DE CONEXIÓN (100000060): B1 License Error Unknown error #100000060
 
+                //oCompany.UserName = "desarrollos";     // Usuario de SAP B1
+                //oCompany.Password = "1&ns$YI5";        // Contraseña de SAP B1
                 oCompany.UserName = "gschneider";     // Usuario de SAP B1
                 oCompany.Password = "TzLt3#MA";        // Contraseña de SAP B1
                 oCompany.UseTrusted = false;

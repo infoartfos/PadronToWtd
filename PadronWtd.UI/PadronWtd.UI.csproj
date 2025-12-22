@@ -86,6 +86,7 @@
     <Compile Include="Dto\PSaltaRecordDto.cs" />
     <Compile Include="Forms\FrmImportar.cs" />
     <Compile Include="Forms\MainForm.cs" />
+    <Compile Include="Helper\EncryptionHelper.cs" />
     <Compile Include="Helper\FileDialogHelper.cs" />
     <Compile Include="Helper\SequentialId..cs" />
     <Compile Include="Logging\FileLogger.cs" />
@@ -97,6 +98,7 @@
     <Compile Include="Repository\DI\ContDateRepository.cs" />
     <Compile Include="Repository\DI\PSaltaRepository.cs" />
     <Compile Include="Repository\DI\SaltaConfigRepository.cs" />
+    <Compile Include="Repository\DI\SapConnectionManager.cs" />
     <Compile Include="Repository\SL\PSaltaRepository.cs" />
     <Compile Include="Services\FileImportService.cs" />
     <Compile Include="Services\FrmImportarService.cs" />

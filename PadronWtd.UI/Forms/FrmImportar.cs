@@ -64,7 +64,16 @@ namespace PadronWtd.UI.Forms
         {
             _application = application;
             _logger = SimpleServiceProvider.Get<ILogger>();
-            _importService = new FileImportService();
+            try
+            {
+                _importService = new FileImportService();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error al conectarse a la DB", ex);
+                _application.MessageBox("Error al conectarse a la DB: " + ex.Message);
+                throw ex;
+            }
             _periodosService = new PeriodosService();
 
             _company = App.Company;
@@ -189,12 +198,6 @@ namespace PadronWtd.UI.Forms
         }
 
         // --- TIMER PARA CHECK DE ARCHIVOS ---
-
-        private void changedPeriodo()
-        {
-            _btnProc.Item.Visible = false;
-            _btnProc.Item.Visible = true;
-        }
 
         private void StartQueueTimer()
         {
@@ -594,24 +597,31 @@ namespace PadronWtd.UI.Forms
             {
                 if (_repository == null) return;
                 int errors = await _repository.CountErrorsAsync(qValue, year);
-
-                SafeUpdateUI(() =>
-                {
-                    try 
-                    { 
-                        _oForm.Items.Item(BtnReprocessID).Visible = (errors > 0);
-
-                        _oForm.Items.Item(BtnImportID).Visible = (errors == 0);
-                        _oForm.Items.Item(BtnBrowseID).Visible = (errors == 0);
-                        _oForm.Items.Item(TxtArchivoID).Visible = (errors == 0);
-                        _oForm.Items.Item("lblFile").Visible = (errors == 0);
-                    } catch 
-                    {
-                    }
-                });
+                changedPeriodo(errors);
             }
             catch (Exception ex) { _logger.Error("Error chequeando errores", ex); }
         }
+
+        private void changedPeriodo(int errors)
+        {
+            SafeUpdateUI(() =>
+            {
+                try
+                {
+                    _oForm.Items.Item(BtnReprocessID).Visible = (errors > 0);
+
+                    _oForm.Items.Item(BtnImportID).Visible = (errors == 0);
+                    _oForm.Items.Item(BtnBrowseID).Visible = (errors == 0);
+                    _oForm.Items.Item(TxtArchivoID).Visible = (errors == 0);
+                    _oForm.Items.Item("lblFile").Visible = (errors == 0);
+                }
+                catch
+                {
+                }
+            });
+        }
+
+
 
         private void CheckFileQueue()
         {
@@ -640,14 +650,14 @@ namespace PadronWtd.UI.Forms
             SafeUpdateUI(() => ((StaticText)_oForm.Items.Item(LblResumenID).Specific).Caption = message);
         }
 
-        private void UpdateResultLabels(string t1, string t2, string t3)
+        private void UpdateResultLabels(string t1, string t2, string t3, string caption = "Última corrida:")
         {
             SafeUpdateUI(() =>
             {
                 ((StaticText)_oForm.Items.Item(LblLine1ID).Specific).Caption = t1;
                 ((StaticText)_oForm.Items.Item(LblLine2ID).Specific).Caption = t2;
                 ((StaticText)_oForm.Items.Item(LblLine3ID).Specific).Caption = t3;
-                ((StaticText)_oForm.Items.Item(LblResumenID).Specific).Caption = "Proceso Finalizado.";
+                ((StaticText)_oForm.Items.Item(LblResumenID).Specific).Caption = caption;
             });
         }
 

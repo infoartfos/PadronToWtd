@@ -14,18 +14,11 @@ namespace PadronWtd.UI.Forms
         private readonly Application _app;
         private Form _form;
 
-        // UID constante para identificar este formulario unívocamente
         private const string FormUID = "frmPadron";
 
         public MainForm(Application app)
         {
             _app = app;
-            string text = AppConstants.MainFormTitle;
-            string apiUrl = AppSettings.ApiUrl;
-
-            Console.WriteLine("Title  : " + text);
-
-            // Llamamos a la creación
             CreateForm();
         }
 
@@ -33,16 +26,10 @@ namespace PadronWtd.UI.Forms
         {
             try
             {
-                // -----------------------------------------------------------
-                // PATRÓN SINGLETON: Verificar si el form ya existe
-                // -----------------------------------------------------------
                 try
                 {
-                    // Intentamos obtener el formulario por su ID
                     _form = _app.Forms.Item(FormUID);
 
-                    // Si no falla la línea anterior, significa que existe.
-                    // Lo traemos al frente y salimos.
                     _form.Select();
                     return;
                 }

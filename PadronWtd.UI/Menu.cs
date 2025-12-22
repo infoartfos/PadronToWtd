@@ -72,6 +72,7 @@ namespace PadronWtd.UI
             }
             catch (Exception ex)
             {
+                
                 App.SBO_Application.MessageBox(
                     AppConstants.ErrorUnexpected + "\n" + ex.Message,
                     1, "OK"

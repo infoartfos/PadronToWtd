@@ -1,6 +1,7 @@
 ﻿using PadronWtd.Domain;
 using PadronWtd.Repository.DI;
 using PadronWtd.UI.DI;
+using SAPbobsCOM;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,15 +13,14 @@ namespace PadronWtd.UI.Services
     {
         private readonly ContDateRepository _repository;
         private readonly PSaltaRepository _padronRepository;
+        private readonly Company _company;
 
 
-        public PeriodosService()
+        public PeriodosService(bool forceServiceUser = true)
         {
-            if (App.Company == null)
-                throw new InvalidOperationException("DI API no conectada.");
-
-            _repository = new ContDateRepository(App.Company);
-            _padronRepository = new PSaltaRepository(App.Company);
+            _company = SapConnectionManager.Instance.GetCompany(forceServiceUser);
+            _repository = new ContDateRepository(_company);
+            _padronRepository = new PSaltaRepository(_company);
         }
 
         public async Task<List<ComboItem>> GetActivePeriodosAsync()

@@ -2,6 +2,7 @@
 using PadronWtd.Repository.DI;
 using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
+using SAPbobsCOM;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -13,10 +14,12 @@ namespace PadronWtd.UI.Services
     public class FileImportService
     {
         private readonly ILogger _logger;
+        private readonly Company _company;
 
-        public FileImportService()
+        public FileImportService(bool forceServiceUser = true)
         {
             _logger = SimpleServiceProvider.Get<ILogger>();
+            _company = SapConnectionManager.Instance.GetCompany(forceServiceUser);
         }
 
         public async Task<int> ProcessImportAsync(string filePath, string year, string qValue, IProgress<int> progress = null)
@@ -24,16 +27,13 @@ namespace PadronWtd.UI.Services
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
                 throw new FileNotFoundException("El archivo especificado no existe.", filePath);
 
-            if (App.Company == null || !App.Company.Connected)
-                throw new InvalidOperationException("No hay conexión activa con DI API (App.Company es nulo).");
-
             List<PSaltaRecord> recordsToInsert = await Task.Run(() => ParseFile(filePath, year, qValue));
 
             if (recordsToInsert.Count == 0)
                 return 0;
 
             progress.Report(0);
-            var repository = new PSaltaRepository(App.Company);
+            var repository = new PSaltaRepository(_company);
             _logger.Info("Borrando registros anteriores " + qValue + " " + year);
             await repository.DeleteByAnioAndQAsync(qValue, year);
             _logger.Info("terminó borrado registros anteriores ");
