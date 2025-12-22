@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AddOnRegData xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+              xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+              Name="PadronWtd" 
+              Path="x86" 
+              Exename="PadronWtd.UI.exe" 
+              Version="1.0.1" 
+              PartnerName="Contreras" 
+              Id="PWTD" 
+              SingleInstallation="false" 
+              SelfReg="false" 
+              NoUAC="true">
+  <Platforms>
+    <Platform Content="x86">
+      <Installation>
+        <Files>
+          <File FileName="x86\PadronWtd.UI.exe">
+            <Actions />
+          </File>
+        </Files>
+      </Installation>
+    </Platform>
+    <Platform Content="x64">
+      <Installation>
+        <Files>
+          <File FileName="x64\PadronWtd.UI.exe">
+            <Actions />
+          </File>
+        </Files>
+      </Installation>
+    </Platform>
+  </Platforms>
+</AddOnRegData>
