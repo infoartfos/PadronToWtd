@@ -40,7 +40,7 @@ namespace PadronWtd.UI.Services
 
             log("Iniciando login contra Service Layer...");
 
-            await _sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
+            await _sl.LoginAsync("gschneider", "xxxxxxxxxxxx", "SBP_SIOC_CHAR");
 
             log("Login OK.");
 
@@ -91,7 +91,7 @@ namespace PadronWtd.UI.Services
                 catch (ServiceLayerAuthException)
                 {
                     log("Token expirado. Reintentando login...");
-                    await _sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
+                    await _sl.LoginAsync("gschneider", "xxxxxxxxxxxxxxxxx", "SBP_SIOC_CHAR");
                 }
                 catch (Exception ex)
                 {

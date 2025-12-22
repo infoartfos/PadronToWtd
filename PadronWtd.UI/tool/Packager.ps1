@@ -69,7 +69,7 @@ foreach ($Arch in $Architectures) {
 
 # --- Empaquetado ---
 Write-Header "GENERANDO ZIP FINAL"
-$ManifestSource = Join-Path $ProjectDir "extension.xml"
+$ManifestSource = Join-Path $ProjectDir "$ProjectName\extension.xml"
 if (Test-Path $ManifestSource) {
     Copy-Item $ManifestSource $StagingFolder
 }
@@ -81,7 +81,7 @@ $ZipPath = Join-Path $BuildDir "Addon_$($ProjectName)_$Timestamp.zip"
 Write-Header "GENERANDO PAQUETE FINAL"
 
 # Copiar extension.xml (si existe)
-$ManifestSource = Join-Path $ProjectDir "extension.xml"
+$ManifestSource = Join-Path $ProjectDir "$ProjectName\extension.xml"
 if (Test-Path $ManifestSource) {
     Copy-Item $ManifestSource $StagingFolder
 }
