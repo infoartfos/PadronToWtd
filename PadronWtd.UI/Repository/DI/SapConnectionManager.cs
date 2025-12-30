@@ -75,12 +75,18 @@ namespace PadronWtd.UI.Services
                 oCompany.Server = ConfigurationManager.AppSettings["SAP.Server"];
                 oCompany.LicenseServer = ConfigurationManager.AppSettings["SAP.LicenseServer"];
                 oCompany.CompanyDB = ConfigurationManager.AppSettings["SAP.CompanyDB"];
-                oCompany.UserName = ConfigurationManager.AppSettings["SAP.UserName"];
+                //oCompany.UserName = ConfigurationManager.AppSettings["SAP.UserName"];
 
                 // Desencriptación de la clave
                 string encryptedPass = ConfigurationManager.AppSettings["SAP.Password"];
                 oCompany.Password = EncryptionHelper.Decrypt(encryptedPass);
-                
+
+                //oCompany.UserName = "GSCHNEIDER";
+                //oCompany.Password = "TzLt3#MA";
+
+                //oCompany.DbUserName = "USERINTDEV";
+                //oCompany.DbPassword = "Argentina2025!";
+
                 oCompany.UseTrusted = false;
                 oCompany.language = BoSuppLangs.ln_Spanish_La;
 
@@ -93,7 +99,12 @@ namespace PadronWtd.UI.Services
                     oCompany.GetLastError(out errCode, out err);
                     string errString = $"Error DI API: {errCode} - {err}";
                     _logger.Error(errString);
-                    string connectString = $"Conexion a: \n-Server: {oCompany.Server} \n-DbServerType: {oCompany.DbServerType} \n-CompanyDB: {oCompany.CompanyDB} \n-UserName: {oCompany.UserName} \n-LicenseServer: {oCompany.LicenseServer} ";
+                    string connectString = $"Conexion a: \n-Server: {oCompany.Server} " +
+                                                 $"\n-DbServerType: {oCompany.DbServerType} " +
+                                                 $"\n-CompanyDB: {oCompany.CompanyDB} " +
+                                                 $"\n-UserName: {oCompany.UserName} " +
+                                                 $"\n-DbUserName: {oCompany.DbUserName} " +
+                                                 $"\n-LicenseServer: {oCompany.LicenseServer} ";
                     _logger.Info(connectString);
                     throw new Exception(errString);
                 }

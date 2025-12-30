@@ -1,71 +1,89 @@
 <?xml version="1.0" encoding="utf-8"?>
-<AddOnRegData xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-              xmlns:xsd="http://www.w3.org/2001/XMLSchema"
-              SlientInstallation="No"
-              SlientUpgrade="No"
-              Partnernmsp="Contreras"
-              SchemaVersion="3.0"
-              Type=""
-              MultipleVersion="false"
-              OnDemand=""
-              OnPremise=""
-              ExtName="PadronWtd"
-              ExtVersion="1.0.4"
-              Contdata=""
-              Partner="Contreras"
-              DBType="HANA"
-              ClientType="A">
+<AddOnRegData xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+			  xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+			  SlientInstallation="No" 
+			  SlientUpgrade="No" 
+			  Partnernmsp="Contreras" 
+			  SchemaVersion="3.0" 
+			  Type="" 
+			  MultipleVersion="false" 
+			  OnDemand="" 
+			  OnPremise="" 
+			  ExtName="PadronWtd" 
+			  ExtVersion="1.0.7" 
+			  Contdata="" 
+			  Partner="Contreras" 
+			  DBType="Both" 
+			  ClientType="A">
 	<Validity>
 		<SBOCompatibility>
 			<Version From="" To="" />
 		</SBOCompatibility>
 	</Validity>
 	<Configuration>
-		<Repository />
-		<Deployment />
-		<Assignment />
+		<Repository>
+			<Properties />
+		</Repository>
+		<Deployment>
+			<Properties />
+		</Deployment>
+		<Assignment>
+			<Properties />
+		</Assignment>
 	</Configuration>
 	<Addons>
 		<Addon Name="PadronWtd" Group="" ForceFlag="" Visible="" AutoAssign="" SelfUpgrd="">
-			<x86 AddonExe="PadronWtd.UI.exe" AddonSig="" ExeDir="x86">
+			<x86 AddonExe="PadronWtd.UI.exe" AddonSig="REPLACE_X86_HASH" ExeDir="x86">
 				<Installation>
 					<Files>
+						<File FileName="x86\Newtonsoft.Json.dll">
+							<Actions />
+						</File>
 						<File FileName="x86\PadronWtd.UI.exe">
 							<Actions />
 						</File>
 						<File FileName="x86\PadronWtd.UI.exe.config">
 							<Actions />
 						</File>
-						<File FileName="x86\Newtonsoft.Json.dll">
-							<Actions />
-						</File>
 					</Files>
 				</Installation>
 				<Uninstallation>
 					<Files>
+						<File FileName="x86\Newtonsoft.Json.dll">
+							<Actions />
+						</File>
 						<File FileName="x86\PadronWtd.UI.exe">
+							<Actions />
+						</File>
+						<File FileName="x86\PadronWtd.UI.exe.config">
 							<Actions />
 						</File>
 					</Files>
 				</Uninstallation>
 			</x86>
-			<x64 AddonExe="PadronWtd.UI.exe" AddonSig="" ExeDir="x64">
+			<x64 AddonExe="PadronWtd.UI.exe" AddonSig="REPLACE_X64_HASH" ExeDir="x64">
 				<Installation>
 					<Files>
+						<File FileName="x64\Newtonsoft.Json.dll">
+							<Actions />
+						</File>
 						<File FileName="x64\PadronWtd.UI.exe">
 							<Actions />
 						</File>
 						<File FileName="x64\PadronWtd.UI.exe.config">
 							<Actions />
 						</File>
-						<File FileName="x64\Newtonsoft.Json.dll">
-							<Actions />
-						</File>
 					</Files>
 				</Installation>
 				<Uninstallation>
 					<Files>
+						<File FileName="x64\Newtonsoft.Json.dll">
+							<Actions />
+						</File>
 						<File FileName="x64\PadronWtd.UI.exe">
+							<Actions />
+						</File>
+						<File FileName="x64\PadronWtd.UI.exe.config">
 							<Actions />
 						</File>
 					</Files>
@@ -73,4 +91,12 @@
 			</x64>
 		</Addon>
 	</Addons>
+	<XApps>
+		<XApp Name="" Path="" FileName="" />
+	</XApps>
+	<UDQs>
+		<UDQ udqname="">
+			<Hana FileName="" />
+		</UDQ>
+	</UDQs>
 </AddOnRegData>

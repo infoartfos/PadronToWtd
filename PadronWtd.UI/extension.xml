@@ -2,7 +2,7 @@
 <Extension xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"
            Name="PadronWtd"
            Vendor="Contreras"
-           Version="1.0.4"
+           Version="1.0.7"
            Prerequisite="None"
            ConfigFile="PadronWtd.UI.exe.config">
 	<SupportPlatform>

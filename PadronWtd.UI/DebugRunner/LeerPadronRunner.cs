@@ -46,8 +46,8 @@ namespace PadronWtd.DebugRunner
 
                 //oCompany.UserName = "desarrollos";     // Usuario de SAP B1
                 //oCompany.Password = "1&ns$YI5";        // Contraseña de SAP B1
-                oCompany.UserName = "gschneider";     // Usuario de SAP B1
-                oCompany.Password = "TzLt3#MA";        // Contraseña de SAP B1
+                oCompany.UserName = "USERINTDEV";     // Usuario de SAP B1
+                oCompany.Password = "Argentina2025!";        // Contraseña de SAP B1
                 oCompany.UseTrusted = false;
                 oCompany.language = BoSuppLangs.ln_Spanish_La;
 
