@@ -3,9 +3,7 @@ using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 using SAPbobsCOM;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -17,8 +15,8 @@ namespace PadronWtd.Repository.DI
     {
         private readonly ILogger _logger;
         private readonly Company _company;
-        private const string TABLE_NAME = "PADRON_SALTA_IMP";
-        private const string DB_TABLE_NAME = "@PADRON_SALTA_IMP";
+        private const string TABLE_NAME = "PADRON_SALTA_IMP2";
+        private const string DB_TABLE_NAME = "@" + TABLE_NAME;
 
         public PSaltaRepository(Company company)
         {
@@ -29,7 +27,23 @@ namespace PadronWtd.Repository.DI
         }
 
         // -----------------------------------------------------------------------
-        // GET ALL: Lee todos los registros
+        // PROTECCIÓN: Truncar strings para evitar "Value too large for column"
+        // -----------------------------------------------------------------------
+        private string Sanitize(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return "";
+            return input.Replace("'", "''").Replace("\r", "").Replace("\n", "").Replace("\t", " ").Trim();
+        }
+
+        private string SafeSubstring(string text, int maxLength)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            string cleaned = Sanitize(text);
+            return cleaned.Length <= maxLength ? cleaned : cleaned.Substring(0, maxLength);
+        }
+
+        // -----------------------------------------------------------------------
+        // GET ALL
         // -----------------------------------------------------------------------
         public async Task<List<PSaltaRecord>> GetAllAsync()
         {
@@ -37,35 +51,26 @@ namespace PadronWtd.Repository.DI
             {
                 var records = new List<PSaltaRecord>();
                 Recordset recordset = null;
-
                 try
                 {
                     recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-
-                    // Query explícito para traer solo lo necesario y castear fechas si fuera necesario en HANA/SQL
                     string query = $@"
                         SELECT 
-                            ""Code"", ""Name"", ""DocEntry"", ""Canceled"", ""Object"", 
-                            ""UserSign"", ""CreateDate"", ""DataSource"",
-                            ""U_Anio"", ""U_Padron"", ""U_Cuit"", ""U_Inscripcion"", 
-                            ""U_Riesgo"", ""U_Notas"", ""U_Procesado"", ""U_Estado""
+                            ""Code"", ""Name"", ""DocEntry"", ""U_Anio"", ""U_Padron"", 
+                            ""U_Cuit"", ""U_Inscripcion"", ""U_Riesgo"", ""U_Notas"", 
+                            ""U_Procesado"", ""U_Estado""
                         FROM ""{DB_TABLE_NAME}"" 
-                        ORDER BY CAST(""Code"" AS INT) ASC";
+                        ORDER BY ""DocEntry"" DESC";
 
                     recordset.DoQuery(query);
 
                     while (!recordset.EoF)
                     {
-                        var rec = new PSaltaRecord
+                        records.Add(new PSaltaRecord
                         {
                             Code = GetValue(recordset, "Code"),
                             Name = GetValue(recordset, "Name"),
                             DocEntry = int.Parse(GetValue(recordset, "DocEntry", "0")),
-                            Canceled = GetValue(recordset, "Canceled"),
-                            Object = GetValue(recordset, "Object"),
-                            DataSource = GetValue(recordset, "DataSource"),
-
-                            // Campos de Usuario
                             U_Anio = GetValue(recordset, "U_Anio"),
                             U_Padron = GetValue(recordset, "U_Padron"),
                             U_Cuit = GetValue(recordset, "U_Cuit"),
@@ -74,88 +79,21 @@ namespace PadronWtd.Repository.DI
                             U_Notas = GetValue(recordset, "U_Notas"),
                             U_Procesado = GetValue(recordset, "U_Procesado"),
                             U_Estado = GetValue(recordset, "U_Estado")
-                        };
-
-                        // Manejo seguro de fechas
-                        var createDateVal = recordset.Fields.Item("CreateDate").Value;
-                        //if (createDateVal != null && createDateVal is DateTime dt)
-                        //{
-                        //    rec.CreateDate = dt;
-                        //}
-
-                        records.Add(rec);
+                        });
                         recordset.MoveNext();
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"Error en GetAllAsync: {ex.Message} {ex.StackTrace}");
+                    _logger.Error($"Error en GetAllAsync: {ex.Message}");
                     throw;
                 }
-                finally
-                {
-                    if (recordset != null) Marshal.ReleaseComObject(recordset);
-                }
-
+                finally { if (recordset != null) Marshal.ReleaseComObject(recordset); }
                 return records;
             });
         }
 
-        // -----------------------------------------------------------------------
-        // CREATE: Inserta un nuevo registro usando UserTable (Datos), no MD
-        // -----------------------------------------------------------------------
-        public async Task<string> CreateAsync(PSaltaRecord r)
-        {
-            return await Task.Run(() =>
-            {
-                UserTable userTable = null;
-                try
-                {
-                    // CORRECCIÓN CRÍTICA: Usamos UserTables.Item, no GetBusinessObject(oUserTables)
-                    // oUserTables es para crear la estructura de la tabla, UserTables.Item es para insertar datos.
-                    userTable = _company.UserTables.Item(TABLE_NAME);
 
-                    // Obtenemos el próximo código manual (ya que es UDT estándar)
-                    string nextCode = GetNextCode();
-
-                    userTable.Code = nextCode;
-                    userTable.Name = string.IsNullOrWhiteSpace(r.Name) ? nextCode : r.Name;
-
-                    // Asignar campos UDF
-                    userTable.UserFields.Fields.Item("U_Anio").Value = r.U_Anio ?? "";
-                    userTable.UserFields.Fields.Item("U_Padron").Value = r.U_Padron ?? "";
-                    userTable.UserFields.Fields.Item("U_Cuit").Value = r.U_Cuit ?? "";
-                    userTable.UserFields.Fields.Item("U_Inscripcion").Value = r.U_Inscripcion ?? "";
-                    userTable.UserFields.Fields.Item("U_Riesgo").Value = r.U_Riesgo ?? "";
-                    userTable.UserFields.Fields.Item("U_Notas").Value = r.U_Notas ?? "";
-                    userTable.UserFields.Fields.Item("U_Procesado").Value = r.U_Procesado ?? "";
-                    userTable.UserFields.Fields.Item("U_Estado").Value = r.U_Estado ?? "";
-
-                    int result = userTable.Add();
-
-                    if (result != 0)
-                    {
-                        string errMsg = _company.GetLastErrorDescription();
-                        throw new Exception($"Error SAP ({result}): {errMsg}");
-                    }
-
-                    return nextCode;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"Error en CreateAsync: {ex.Message} {ex.StackTrace}");
-                    throw;
-                }
-                finally
-                {
-                    if (userTable != null) Marshal.ReleaseComObject(userTable);
-                }
-            });
-        }
-
-        // -----------------------------------------------------------------------
-        // UPDATE: Actualiza un registro existente
-        // -----------------------------------------------------------------------
         public async Task<string> UpdateAsync(PSaltaRecord r)
         {
             return await Task.Run(() =>
@@ -205,55 +143,6 @@ namespace PadronWtd.Repository.DI
             });
         }
 
-        // -----------------------------------------------------------------------
-        // Helpers
-        // -----------------------------------------------------------------------
-
-        private string GetNextCode()
-        {
-            Recordset recordset = null;
-            try
-            {
-                recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-                string sql = $@"SELECT TOP 1 ""Code"" FROM ""{DB_TABLE_NAME}"" ORDER BY CAST(""Code"" AS INT) DESC";
-
-                recordset.DoQuery(sql);
-
-                if (!recordset.EoF && recordset.Fields.Item("Code").Value != null)
-                {
-                    string lastCode = recordset.Fields.Item("Code").Value.ToString();
-                    if (int.TryParse(lastCode, out int num))
-                    {
-                        return (num + 1).ToString();
-                    }
-                }
-
-                return "1";
-            }
-            catch
-            {
-                return "1"; // Fallback en caso de error o tabla vacía
-            }
-            finally
-            {
-                if (recordset != null) Marshal.ReleaseComObject(recordset);
-            }
-        }
-
-        private string GetValue(Recordset rs, string fieldName, string defValue = "")
-        {
-            try
-            {
-                var val = rs.Fields.Item(fieldName).Value;
-                if (val == null) return defValue;
-                return val.ToString();
-            }
-            catch
-            {
-                return defValue;
-            }
-        }
-        
         public async Task<List<PSaltaRecord>> GetByAnioAsync(string q_value, string anio)
         {
             return await Task.Run(() =>
@@ -264,30 +153,30 @@ namespace PadronWtd.Repository.DI
                 try
                 {
                     recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                    // Quitamos DocEntry, Canceled, Object, UserSign, CreateDate, DataSource 
+                    // porque no existen en tablas tipo "Ninguno"
                     string query = $@"
-                        SELECT 
-                            ""Code"", ""Name"", ""DocEntry"", ""Canceled"", ""Object"", 
-                            ""UserSign"", ""CreateDate"", ""DataSource"",
-                            ""U_Anio"", ""U_Padron"", ""U_Cuit"", ""U_Inscripcion"", 
-                            ""U_Riesgo"", ""U_Notas"", ""U_Procesado"", ""U_Estado""
-                        FROM ""{DB_TABLE_NAME}"" 
-                        WHERE ""U_Anio"" = '{anio}'
-                        AND  ""Name"" = '{q_value}'
-                        AND (""U_Estado"" = 'Importado' OR ""U_Estado"" = '10' OR ""U_Estado"" = 'Error' OR ""U_Estado"" = '40')
-                        ORDER BY ""Code"" ASC";
-                    _logger.Info($"Query : {query}");
+                SELECT 
+                    ""Code"", ""Name"", 
+                    ""U_Anio"", ""U_Padron"", ""U_Cuit"", ""U_Inscripcion"", 
+                    ""U_Riesgo"", ""U_Notas"", ""U_Procesado"", ""U_Estado""
+                FROM ""{DB_TABLE_NAME}"" 
+                WHERE ""U_Anio"" = '{anio}'
+                AND ""Name"" = '{q_value}'
+                AND (""U_Estado"" = 'Importado' OR ""U_Estado"" = '10' OR ""U_Estado"" = 'Error' OR ""U_Estado"" = '40')
+                ORDER BY ""Code"" ASC";
+
+                    _logger.Info($"Ejecutando lectura para procesamiento...");
                     recordset.DoQuery(query);
 
                     while (!recordset.EoF)
                     {
-                        var rec = new PSaltaRecord
+                        records.Add(new PSaltaRecord
                         {
                             Code = GetValue(recordset, "Code"),
                             Name = GetValue(recordset, "Name"),
-                            DocEntry = int.Parse(GetValue(recordset, "DocEntry", "0")),
-                            Canceled = GetValue(recordset, "Canceled"),
-                            Object = GetValue(recordset, "Object"),
-                            DataSource = GetValue(recordset, "DataSource"),
+                            // Si necesitas el DocEntry pero no existe la columna, 
+                            // puedes usar el Code si es numérico
                             U_Anio = GetValue(recordset, "U_Anio"),
                             U_Padron = GetValue(recordset, "U_Padron"),
                             U_Cuit = GetValue(recordset, "U_Cuit"),
@@ -296,27 +185,22 @@ namespace PadronWtd.Repository.DI
                             U_Notas = GetValue(recordset, "U_Notas"),
                             U_Procesado = GetValue(recordset, "U_Procesado"),
                             U_Estado = GetValue(recordset, "U_Estado")
-                        };
-
-                        var createDateVal = recordset.Fields.Item("CreateDate").Value;
-                        records.Add(rec);
+                        });
                         recordset.MoveNext();
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"Error en GetByAnioAsync: {ex.Message}{ex.StackTrace}");
+                    _logger.Error($"Error en GetByAnioAsync: {ex.Message}");
                     throw;
                 }
                 finally
                 {
                     if (recordset != null) Marshal.ReleaseComObject(recordset);
                 }
-
                 return records;
             });
         }
-
 
         public async Task<bool> ExistsByAnioAndQAsync(string q_value, string anio)
         {
@@ -351,73 +235,43 @@ namespace PadronWtd.Repository.DI
 
 
         // -----------------------------------------------------------------------
-        // DELETE FAST: Borrado masivo vía SQL Directo
+        // BULK INSERT: Con GUID para Code y Período para Name
         // -----------------------------------------------------------------------
-        public async Task DeleteByAnioAndQAsync(string q_value, string anio)
-        {
-            await Task.Run(() =>
-            {
-                Recordset recordset = null;
-                try
-                {
-                    recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-
-                    string query = $@"
-                        DELETE FROM ""{DB_TABLE_NAME}"" 
-                        WHERE ""U_Anio"" = '{anio}' 
-                        AND ""Name"" = '{q_value}'";
-
-                    recordset.DoQuery(query);
-
-                    _logger.Info($"Borrado masivo ejecutado para Año: {anio}, Q: {q_value}");
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"Error en DeleteByAnioAndQAsync: {ex.Message}");
-                    throw;
-                }
-                finally
-                {
-                    if (recordset != null) Marshal.ReleaseComObject(recordset);
-                }
-            });
-        }
-
         public async Task BulkInsertAsync(List<PSaltaRecord> records, IProgress<int> progress = null)
         {
+            if (records == null || !records.Any()) return;
+
             await Task.Run(() =>
             {
                 Recordset oRS = null;
                 try
                 {
                     oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-
-                    int batchSize = 700;
+                    int batchSize = 500;
                     int totalRecords = records.Count;
                     int processed = 0;
 
-                    int currentDocEntryBase = GetNextDocEntry();
+                    // 1. Obtenemos el punto de partida real de la base de datos (una sola vez)
+                    long currentIdCounter = GetMaxCode() + 1;
+
+                    string periodName = records.First().Name ?? "T01";
 
                     while (processed < totalRecords)
                     {
                         var batch = records.Skip(processed).Take(batchSize).ToList();
-
                         if (batch.Any())
                         {
-                            string sql = BuildHanaInsertBatch(batch, currentDocEntryBase);
-                            // _logger.Info("SQL: " + sql);
+                            // 2. Pasamos el contador actual al constructor del SQL
+                            string sql = BuildHanaInsertBatch(batch, periodName, currentIdCounter);
                             oRS.DoQuery(sql);
 
-                            currentDocEntryBase += batch.Count;
+                            // 3. Incrementamos el contador por la cantidad de registros insertados
+                            currentIdCounter += batch.Count;
                         }
 
-                        processed += batchSize;
-                        if (progress != null)
-                        {
-                            int percent = (int)((double)processed / totalRecords * 100);
-                            progress.Report(percent);
-                        }
-                        _logger.Info("processed: " + processed + "  " + ( (processed * 100) /totalRecords) + "%  ");
+                        processed += batch.Count;
+                        if (progress != null) progress.Report((processed * 100) / totalRecords);
+                        _logger.Info($"Insertados: {processed} / {totalRecords}");
                     }
                 }
                 catch (Exception ex)
@@ -425,98 +279,67 @@ namespace PadronWtd.Repository.DI
                     _logger.Error($"Error en BulkInsert: {ex.Message}");
                     throw;
                 }
-                finally
-                {
-                    if (oRS != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(oRS);
-                }
+                finally { if (oRS != null) Marshal.ReleaseComObject(oRS); }
             });
         }
 
-        private string BuildHanaInsertBatch(List<PSaltaRecord> batch, int startDocEntry)
+        private string BuildHanaInsertBatch(List<PSaltaRecord> batch, string periodName, long startCode)
         {
             StringBuilder sb = new StringBuilder();
-
-            sb.Append("INSERT INTO \"@PADRON_SALTA_IMP\" ");
-            sb.Append("(\"DocEntry\", \"Code\", \"Name\", \"DataSource\", \"UserSign\", \"Object\", \"CreateDate\", \"Canceled\", ");
-            sb.Append("\"U_Anio\", \"U_Padron\", \"U_Cuit\", \"U_Inscripcion\", \"U_Riesgo\", \"U_Estado\", \"U_Notas\") ");
-
-            string objectType = "PADRON_SALTA_IMP";
-            string userSign = "1";
+            sb.Append($"INSERT INTO \"{DB_TABLE_NAME}\" ");
+            sb.Append("(\"Code\", \"Name\", \"U_Anio\", \"U_Padron\", \"U_Cuit\", \"U_Inscripcion\", \"U_Riesgo\", \"U_Estado\", \"U_Notas\") ");
 
             for (int i = 0; i < batch.Count; i++)
             {
                 var r = batch[i];
-                int rowDocEntry = startDocEntry + i;
 
-                if (string.IsNullOrEmpty(r.Code)) r.Code = SequentialId.Generate();
-                string name = string.IsNullOrEmpty(r.Name) ? r.Code : r.Name;
+                // GENERACIÓN SECUENCIAL PURA: startCode + i
+                string uniqueCode = (startCode + i).ToString();
+                string rowName = SafeSubstring(periodName, 50);
 
                 if (i > 0) sb.Append(" UNION ALL ");
+                sb.Append(" SELECT ");
 
-                sb.Append("SELECT ");
+                if (i == 0)
+                    sb.Append($"CAST('{uniqueCode}' AS NVARCHAR(50)), CAST('{rowName}' AS NVARCHAR(100)), ");
+                else
+                    sb.Append($"'{uniqueCode}', '{rowName}', ");
 
-                // --- COLUMNAS DEL SISTEMA ---
-                sb.Append($"{rowDocEntry}, ");                 // DocEntry (Entero)
-                sb.Append($"'{r.Code}', ");                    // Code
-                sb.Append($"'{Sanitize(name)}', ");            // Name
-                sb.Append("'I', ");                            // DataSource
-                sb.Append($"{userSign}, ");                    // UserSign
-                sb.Append($"'{objectType}', ");                // Object
+                // --- LÍMITES BASADOS EN TU IMAGEN DE SAP ---
+                sb.Append($"'{SafeSubstring(r.U_Anio, 4)}', ");
+                sb.Append($"'{SafeSubstring(r.U_Padron, 250)}', ");
+                sb.Append($"'{SafeSubstring(r.U_Cuit, 11)}', ");
+                sb.Append($"'{SafeSubstring(r.U_Inscripcion, 2)}', ");
+                sb.Append($"'{SafeSubstring(r.U_Riesgo, 2)}', ");
+                sb.Append("'10', "); // Estado: "10" para que quepa en Alfanumérico(2)
+                sb.Append($"'{SafeSubstring(r.U_Notas, 50)}' ");
 
-                // CORRECCIÓN PARA FECHA DE SISTEMA:
-                // Usamos CAST(CURRENT_DATE AS DATE) para que HANA no tenga dudas.
-                sb.Append("CAST(CURRENT_DATE AS DATE), ");     // CreateDate
-
-                sb.Append("'N', ");                            // Canceled
-
-                // --- COLUMNAS DE USUARIO (Revisar tipos en SAP si falla) ---
-                sb.Append($"'{Sanitize(r.U_Anio)}', ");
-                sb.Append($"'{Sanitize(r.U_Padron)}', ");
-                sb.Append($"'{Sanitize(r.U_Cuit)}', ");
-                sb.Append($"'{Sanitize(r.U_Inscripcion)}', ");
-                sb.Append($"'{Sanitize(r.U_Riesgo)}', ");
-                sb.Append($"'{Sanitize(r.U_Estado)}', ");
-                // sb.Append($"'{Sanitize(r.U_Procesado)}', ");
-                sb.Append($"'{Sanitize(r.U_Notas)}' ");
-
-                sb.Append("FROM DUMMY ");
+                sb.Append(" FROM DUMMY ");
             }
-
             return sb.ToString();
         }
-        private int GetNextDocEntry()
+
+        private long GetMaxCode()
         {
             Recordset rs = null;
             try
             {
                 rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-                string sql = "SELECT IFNULL(MAX(\"DocEntry\"), 0) FROM \"@PADRON_SALTA_IMP\"";
+                // Buscamos el Code más alto convertido a número para no chocar
+                string sql = $"SELECT MAX(CAST(\"Code\" AS BIGINT)) FROM \"{DB_TABLE_NAME}\"";
                 rs.DoQuery(sql);
-
-                if (!rs.EoF)
+                if (!rs.EoF && rs.Fields.Item(0).Value != null)
                 {
-                    return int.Parse(rs.Fields.Item(0).Value.ToString()) + 1;
+                    return Convert.ToInt64(rs.Fields.Item(0).Value.ToString());
                 }
-                return 1;
+                return 0;
             }
-            catch
-            {
-                return 1;
-            }
-            finally
-            {
-                if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
-            }
-        }
-
-        private string Sanitize(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return "";
-            return input.Replace("'", "''");
+            catch { return 0; }
+            finally { if (rs != null) Marshal.ReleaseComObject(rs); }
         }
 
         // -----------------------------------------------------------------------
-        // UPDATE MASSIVE: Marca como '30' (No Existe) los proveedores que no están en OCRD
+        // OTROS MÉTODOS PÚBLICOS
         // -----------------------------------------------------------------------
         public async Task<int> MarkNonExistentProvidersAsync(string qValue, string year)
         {
@@ -526,25 +349,18 @@ namespace PadronWtd.Repository.DI
                 try
                 {
                     rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-
                     string updateQuery = $@"
                         UPDATE ""{DB_TABLE_NAME}""
-                        SET 
-                            ""U_Estado"" = '30',
+                        SET ""U_Estado"" = '30',
                             ""U_Procesado"" = TO_VARCHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI'),
                             ""U_Notas"" = 'Proveedor No Existe (pl)'
-                        WHERE ""U_Anio"" = '{year}'
-                        AND ""Name"" = '{qValue}'
-                        AND (""U_Estado"" = 'Importado' OR ""U_Estado"" = '10' )
+                        WHERE ""U_Anio"" = '{year}' AND ""Name"" = '{qValue}'
+                        AND (""U_Estado"" = 'Importado' OR ""U_Estado"" = '10')
                         AND NOT EXISTS (
-                            SELECT 1 
-                            FROM ""OCRD"" T0 
+                            SELECT 1 FROM ""OCRD"" T0 
                             WHERE T0.""LicTradNum"" = ""{DB_TABLE_NAME}"".""U_Cuit""
                             AND UPPER(T0.""CardCode"") LIKE 'PL%'
                         )";
-
-                    _logger.Info("Ejecutando validación masiva de proveedores...");
-                    _logger.Info(updateQuery);
                     rs.DoQuery(updateQuery);
                     return 0;
                 }
@@ -553,30 +369,74 @@ namespace PadronWtd.Repository.DI
                     _logger.Error($"Error en MarkNonExistentProvidersAsync: {ex.Message}");
                     throw;
                 }
-                finally
-                {
-                    if (rs != null) Marshal.ReleaseComObject(rs);
-                }
+                finally { if (rs != null) Marshal.ReleaseComObject(rs); }
             });
         }
 
-        public void ExecuteSpInsertWtd3(Company company, int entry, int ?linea, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
+        public async Task DeleteByAnioAndQAsync(string q_value, string anio)
+        {
+            await Task.Run(() =>
             {
-                Recordset oRecordset = null;
-
+                Recordset rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
                 try
                 {
-                    oRecordset = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                    string sql = $@"DELETE FROM ""{DB_TABLE_NAME}"" WHERE ""U_Anio"" = '{anio}' AND ""Name"" = '{q_value}'";
+                    _logger.Info($"Borrando anteriores: {sql}");
+                    rs.DoQuery(sql);
+                }
+                finally { Marshal.ReleaseComObject(rs); }
+            });
+        }
 
-                    string fDesde = desde.ToString("yyyyMMdd");
-                    string fHasta = hasta.ToString("yyyyMMdd");
+        public async Task<int> CountErrorsAsync(string qValue, string year)
+        {
+            return await Task.Run(() =>
+            {
+                Recordset rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                try
+                {
+                    string query = $@"SELECT COUNT(*) FROM ""{DB_TABLE_NAME}"" 
+                                     WHERE ""U_Anio"" = '{year}' AND ""Name"" = '{qValue}'
+                                     AND ""U_Estado"" NOT IN ('30', '20', '10', 'Importado', 'Pendiente')";
+                    rs.DoQuery(query);
+                    return (!rs.EoF) ? int.Parse(rs.Fields.Item(0).Value.ToString()) : 0;
+                }
+                catch { return 0; }
+                finally { Marshal.ReleaseComObject(rs); }
+            });
+        }
 
-                    string sqlEntry =  entry.ToString();
+        public async Task ResetErrorRecordsAsync(string qValue, string year)
+        {
+            await Task.Run(() =>
+            {
+                Recordset rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                try
+                {
+                    string sql = $@"UPDATE ""{DB_TABLE_NAME}"" SET ""U_Estado"" = '10', ""U_Notas"" = 'Reprocesamiento', ""U_Procesado"" = NULL 
+                                   WHERE ""U_Anio"" = '{year}' AND ""Name"" = '{qValue}' AND ""U_Estado"" NOT IN ('20', '10')";
+                    rs.DoQuery(sql);
+                }
+                finally { Marshal.ReleaseComObject(rs); }
+            });
+        }
+        public void ExecuteSpInsertWtd3(Company company, int entry, int? linea, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
+        {
+            Recordset oRecordset = null;
 
-                    string sqlLinea = linea.HasValue ? linea.Value.ToString() : "NULL";
+            try
+            {
+                oRecordset = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
+
+                string fDesde = desde.ToString("yyyyMMdd");
+                string fHasta = hasta.ToString("yyyyMMdd");
+
+                string sqlEntry = entry.ToString();
+
+                string sqlLinea = linea.HasValue ? linea.Value.ToString() : "NULL";
 
 
-                    string query = $@"
+                string query = $@"
                     CALL ""SBP_SIOC_CHAR"".""SP_INSERT_WTD3"" (
                         {entry}, 
                         {sqlLinea}, 
@@ -587,24 +447,25 @@ namespace PadronWtd.Repository.DI
                         '{part2}', 
                         '{detType}'
                     )";
-                    _logger.Info(query);
-                    oRecordset.DoQuery(query);
+                _logger.Info(query);
+                oRecordset.DoQuery(query);
 
-                }
-                catch (Exception ex)
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error al ejecutar SP_INSERT_WTD3: {ex.Message} {ex.StackTrace}");
+                throw new Exception($"Error al ejecutar SP_INSERT_WTD3: {ex.Message}");
+            }
+            finally
+            {
+                if (oRecordset != null)
                 {
-                    _logger.Error($"Error al ejecutar SP_INSERT_WTD3: {ex.Message} {ex.StackTrace}");
-                    throw new Exception($"Error al ejecutar SP_INSERT_WTD3: {ex.Message}");
-                }
-                finally
-                {
-                    if (oRecordset != null)
-                    {
-                        Marshal.ReleaseComObject(oRecordset);
-                        oRecordset = null;
-                    }
+                    Marshal.ReleaseComObject(oRecordset);
+                    oRecordset = null;
                 }
             }
+        }
+
 
         public void ExecutePrWtd3(Company company, int absEntry, int lineNum, string wtCode, string tipo, string cuit, string risk, double rate, DateTime desde, DateTime hasta)
         {
@@ -645,6 +506,95 @@ namespace PadronWtd.Repository.DI
             }
         }
 
+
+        //public async Task<List<PSaltaRecord>> GetByAnioAsync(string q_value, string anio)
+        //{
+        //    return await Task.Run(() =>
+        //    {
+        //        var records = new List<PSaltaRecord>();
+        //        Recordset rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+        //        try
+        //        {
+        //            string query = $@"SELECT * FROM ""{DB_TABLE_NAME}"" WHERE ""U_Anio""='{anio}' AND ""Name""='{q_value}'
+        //                             AND ""U_Estado"" IN ('Importado','10','Error','40') ORDER BY ""DocEntry"" ASC";
+        //            rs.DoQuery(query);
+        //            while (!rs.EoF)
+        //            {
+        //                records.Add(new PSaltaRecord
+        //                {
+        //                    Code = GetValue(rs, "Code"),
+        //                    Name = GetValue(rs, "Name"),
+        //                    U_Anio = GetValue(rs, "U_Anio"),
+        //                    U_Padron = GetValue(rs, "U_Padron"),
+        //                    U_Cuit = GetValue(rs, "U_Cuit"),
+        //                    U_Inscripcion = GetValue(rs, "U_Inscripcion"),
+        //                    U_Riesgo = GetValue(rs, "U_Riesgo"),
+        //                    U_Notas = GetValue(rs, "U_Notas"),
+        //                    U_Procesado = GetValue(rs, "U_Procesado"),
+        //                    U_Estado = GetValue(rs, "U_Estado")
+        //                });
+        //                rs.MoveNext();
+        //            }
+        //        }
+        //        finally { Marshal.ReleaseComObject(rs); }
+        //        return records;
+        //    });
+        //}
+        public async Task<Dictionary<string, int>> GetStatsByAnioAsync(string qValue, string year)
+        {
+            return await Task.Run(() =>
+            {
+                var stats = new Dictionary<string, int>();
+                Recordset rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                try
+                {
+                    string query = $@"SELECT ""U_Estado"", COUNT(*) FROM ""{DB_TABLE_NAME}"" 
+                                     WHERE ""U_Anio"" = '{year}' AND ""Name"" = '{qValue}' GROUP BY ""U_Estado""";
+                    _logger.Info(query);
+                    rs.DoQuery(query);
+                    while (!rs.EoF)
+                    {
+                        stats.Add(rs.Fields.Item(0).Value.ToString(), int.Parse(rs.Fields.Item(1).Value.ToString()));
+                        rs.MoveNext();
+                    }
+                }
+                finally { Marshal.ReleaseComObject(rs); }
+                return stats;
+            });
+        }
+
+
+
+        //public async Task<bool> ExistsByAnioAndQAsync(string q_value, string anio)
+        //{
+        //    return await Task.Run(() =>
+        //    {
+        //        Recordset rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+        //        try
+        //        {
+        //            rs.DoQuery($@"SELECT TOP 1 ""Code"" FROM ""{DB_TABLE_NAME}"" WHERE ""U_Anio""='{anio}' AND ""Name""='{q_value}'");
+        //            return !rs.EoF;
+        //        }
+        //        finally { Marshal.ReleaseComObject(rs); }
+        //    });
+        //}
+
+        //public async Task<int> MarkNonExistentProvidersAsync(string qValue, string year)
+        //{
+        //    return await Task.Run(() =>
+        //    {
+        //        Recordset rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+        //        try
+        //        {
+        //            string sql = $@"UPDATE ""{DB_TABLE_NAME}"" SET ""U_Estado""='30', ""U_Notas""='Proveedor No Existe (pl)', ""U_Procesado""=TO_VARCHAR(CURRENT_TIMESTAMP,'YYYY-MM-DD HH24:MI')
+        //                           WHERE ""U_Anio""='{year}' AND ""Name""='{qValue}' AND (""U_Estado""='Importado' OR ""U_Estado""='10')
+        //                           AND NOT EXISTS (SELECT 1 FROM ""OCRD"" T0 WHERE T0.""LicTradNum""=""{DB_TABLE_NAME}"".""U_Cuit"" AND UPPER(T0.""CardCode"") LIKE 'PL%')";
+        //            rs.DoQuery(sql);
+        //            return 0;
+        //        }
+        //        finally { Marshal.ReleaseComObject(rs); }
+        //    });
+        //}
         public void InsertWtd3Direct(Company company, int entry, int? linea, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
         {
             Recordset oRecordset = null;
@@ -681,7 +631,7 @@ namespace PadronWtd.Repository.DI
                         '{detType}'
                     )";
 
-                _logger.Info(query); 
+                _logger.Info(query);
                 oRecordset.DoQuery(query);
             }
             catch (Exception ex)
@@ -750,228 +700,39 @@ namespace PadronWtd.Repository.DI
             }
         }
 
-
-        // -----------------------------------------------------------------------
-        // Lógica C# equivalente al SP PR_WTD3 (Upsert inteligente)
-        // -----------------------------------------------------------------------
         public void ExecutePrWtd3Logic(Company company, string entryStr, string wtCode, string tipo, string cuit, string risk, double rate, DateTime desde, DateTime hasta)
         {
             Recordset rs = null;
             try
             {
-                // 1. Validar y convertir Entry
-                if (!int.TryParse(entryStr, out int absEntry))
-                {
-                    throw new Exception($"El AbsEntry '{entryStr}' no es un número válido.");
-                }
-
+                if (!int.TryParse(entryStr, out int absEntry)) return;
                 rs = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
-
-                string fDesde = desde.ToString("yyyyMMdd");
                 string fHasta = hasta.ToString("yyyyMMdd");
+                string fDesde = desde.ToString("yyyyMMdd");
                 string sqlRate = rate.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-                // -----------------------------------------------------------
-                // PASO 1: Verificar existencia (Equivalente a HAY1 en el SP)
-                // -----------------------------------------------------------
-                string checkQuery = $@"
-                    SELECT ""LineId""
-                    FROM ""WTD3""
-                    WHERE ""AbsEntry"" = {absEntry} 
-                    AND ""KeyPart1"" = '{cuit}' 
-                    AND ""DetailType"" = '{tipo}'";
-
-                rs.DoQuery(checkQuery);
-
+                rs.DoQuery($@"SELECT ""LineId"" FROM ""WTD3"" WHERE ""AbsEntry""={absEntry} AND ""KeyPart1""='{cuit}' AND ""DetailType""='{tipo}'");
                 if (!rs.EoF)
                 {
-                    // -----------------------------------------------------------
-                    // CAMINO A: UPDATE (Si HAY1 > 0)
-                    // Solo actualizamos la fecha de fin (DateTo), igual que el SP
-                    // -----------------------------------------------------------
-                    int existingLineId = int.Parse(rs.Fields.Item("LineId").Value.ToString());
-
-                    string updateQuery = $@"
-                        UPDATE ""WTD3"" 
-                        SET ""DateTo"" = TO_DATE('{fHasta}', 'YYYYMMDD')
-                        WHERE ""AbsEntry"" = {absEntry} 
-                        AND ""LineId"" = {existingLineId}";
-
-                    // _logger.Info($"Actualizando WTD3 (Update) para CUIT {cuit}");
-                    rs.DoQuery(updateQuery);
+                    int lid = int.Parse(rs.Fields.Item(0).Value.ToString());
+                    rs.DoQuery($@"UPDATE ""WTD3"" SET ""DateTo""=TO_DATE('{fHasta}','YYYYMMDD') WHERE ""AbsEntry""={absEntry} AND ""LineId""={lid}");
                 }
                 else
                 {
-                    // -----------------------------------------------------------
-                    // CAMINO B: INSERT (Si HAY1 = 0)
-                    // Calculamos LineId dinámico para evitar 'Duplicate Key' (HAY2 del SP)
-                    // -----------------------------------------------------------
-
-                    // B1. Calcular próximo LineId
-                    string maxLineQuery = $@"SELECT IFNULL(MAX(""LineId""), 0) + 1 FROM ""WTD3"" WHERE ""AbsEntry"" = {absEntry}";
-                    rs.DoQuery(maxLineQuery);
-                    int newLineId = int.Parse(rs.Fields.Item(0).Value.ToString());
-
-                    // B2. Insertar
-                    string insertQuery = $@"
-                        INSERT INTO ""WTD3"" 
-                        (
-                            ""AbsEntry"", ""LineId"", ""WTCode"", ""KeyPart1"", ""KeyPart2"", ""DetailType"",
-                            ""U_B1SYS_HighRisk"", ""Rate"", ""DateFrom"", ""DateTo"", ""DataSource"", ""LogInstanc""
-                        )
-                        VALUES 
-                        (
-                            {absEntry}, 
-                            {newLineId}, 
-                            '{wtCode}', 
-                            '{cuit}', 
-                            '80', 
-                            '{tipo}', 
-                            '{risk}', 
-                            {sqlRate}, 
-                            TO_DATE('{fDesde}', 'YYYYMMDD'), 
-                            TO_DATE('{fHasta}', 'YYYYMMDD'), 
-                            'N', 
-                            0
-                        )";
-
-                    // _logger.Info($"Insertando WTD3 (New) para CUIT {cuit}");
-                    rs.DoQuery(insertQuery);
+                    rs.DoQuery($@"SELECT IFNULL(MAX(""LineId""),0)+1 FROM ""WTD3"" WHERE ""AbsEntry""={absEntry}");
+                    int nlid = int.Parse(rs.Fields.Item(0).Value.ToString());
+                    rs.DoQuery($@"INSERT INTO ""WTD3"" (""AbsEntry"",""LineId"",""WTCode"",""KeyPart1"",""KeyPart2"",""DetailType"",""U_B1SYS_HighRisk"",""Rate"",""DateFrom"",""DateTo"",""DataSource"",""LogInstanc"")
+                                 VALUES ({absEntry},{nlid},'{wtCode}','{cuit}','80','{tipo}','{risk}',{sqlRate},TO_DATE('{fDesde}','YYYYMMDD'),TO_DATE('{fHasta}','YYYYMMDD'),'N',0)");
                 }
             }
-            catch (Exception ex)
-            {
-                throw new Exception($"Error en ExecutePrWtd3Logic (Cuit: {cuit}): {ex.Message}");
-            }
-            finally
-            {
-                if (rs != null)
-                {
-                    System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
-                    rs = null;
-                }
-            }
+            finally { if (rs != null) Marshal.ReleaseComObject(rs); }
         }
-        //public void UpsertWtd3Direct(Company company, int entry, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType)
-        //{
-        //    Recordset rs = null;
-        //    try
-        //    {
-        //        rs = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
 
-        //        string fDesde = desde.ToString("yyyyMMdd");
-        //        string fHasta = hasta.ToString("yyyyMMdd");
-
-        //        string checkQuery = $@"
-        //            SELECT ""LineId"" 
-        //            FROM ""WTD3"" 
-        //            WHERE ""AbsEntry"" = {entry} 
-        //            AND ""KeyPart1"" = '{cuit}' 
-        //            AND ""DetailType"" = '{detType}'";
-
-        //        rs.DoQuery(checkQuery);
-
-        //        if (!rs.EoF)
-        //        {
-        //            int existingLineId = int.Parse(rs.Fields.Item("LineId").Value.ToString());
-
-        //            string updateQuery = $@"
-        //                UPDATE ""WTD3"" 
-        //                SET 
-        //                    ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD'),
-        //                    ""DateTo"" = TO_DATE('{fHasta}', 'YYYYMMDD'),
-        //                    ""WTCode"" = '{wddCode}' 
-        //                WHERE ""AbsEntry"" = {entry} 
-        //                AND ""LineId"" = {existingLineId}";
-
-        //            _logger.Info("UPDATE WTD3: " + updateQuery);
-        //            rs.DoQuery(updateQuery);
-        //        }
-        //        else
-        //        {
-        //            string maxLineQuery = $@"SELECT IFNULL(MAX(""LineId""), 0) + 1 FROM ""WTD3"" WHERE ""AbsEntry"" = {entry}";
-        //            rs.DoQuery(maxLineQuery);
-        //            int newLineId = int.Parse(rs.Fields.Item(0).Value.ToString());
-
-        //            string insertQuery = $@"
-        //                INSERT INTO ""WTD3"" 
-        //                (""AbsEntry"", ""LineId"", ""WTCode"", ""KeyPart1"", ""DateFrom"", ""DateTo"", ""KeyPart2"", ""DetailType"")
-        //                VALUES 
-        //                (
-        //                    {entry}, 
-        //                    {newLineId}, 
-        //                    '{wddCode}', 
-        //                    '{cuit}', 
-        //                    TO_DATE('{fDesde}', 'YYYYMMDD'), 
-        //                    TO_DATE('{fHasta}', 'YYYYMMDD'), 
-        //                    '{part2}', 
-        //                    '{detType}'
-        //                )";
-
-        //            _logger.Info("INSERT WTD3: " + insertQuery);
-        //            rs.DoQuery(insertQuery);
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        throw new Exception($"Error al procesar WTD3 (Upsert): {ex.Message}");
-        //    }
-        //    finally
-        //    {
-        //        if (rs != null)
-        //        {
-        //            System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
-        //            rs = null;
-        //        }
-        //    }
-        //}
-
-        // -----------------------------------------------------------------------
-        // GET STATS: Cuenta registros agrupados por Estado para un Año y Q
-        // -----------------------------------------------------------------------
-        public async Task<Dictionary<string, int>> GetStatsByAnioAsync(string qValue, string year)
+        private string GetValue(Recordset rs, string fieldName, string defValue = "")
         {
-            return await Task.Run(() =>
-            {
-                var stats = new Dictionary<string, int>();
-                Recordset rs = null;
-
-                try
-                {
-                    rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-
-                    string query = $@"
-                        SELECT ""U_Estado"", COUNT(*) AS ""Total""
-                        FROM ""{DB_TABLE_NAME}"" 
-                        WHERE ""U_Anio"" = '{year}' 
-                        AND ""Name"" = '{qValue}'
-                        GROUP BY ""U_Estado""
-                        ORDER BY ""U_Estado"" ASC";
-
-                    rs.DoQuery(query);
-
-                    while (!rs.EoF)
-                    {
-                        string estado = rs.Fields.Item("U_Estado").Value?.ToString() ?? "N/A";
-                        int total = int.Parse(rs.Fields.Item("Total").Value.ToString());
-
-                        stats.Add(estado, total);
-                        rs.MoveNext();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"Error en GetStatsByAnioAsync: {ex.Message}");
-                }
-                finally
-                {
-                    if (rs != null) Marshal.ReleaseComObject(rs);
-                }
-
-                return stats;
-            });
+            try { return rs.Fields.Item(fieldName).Value?.ToString() ?? defValue; }
+            catch { return defValue; }
         }
-
 
         public int GetNextLineId(int absEntry)
         {
@@ -1000,78 +761,41 @@ namespace PadronWtd.Repository.DI
             }
         }
 
-        // -----------------------------------------------------------------------
-        // RESET ERRORS: Pone en estado '10' los registros con error para un Q/Año
-        // -----------------------------------------------------------------------
-        public async Task ResetErrorRecordsAsync(string qValue, string year)
-        {
-            await Task.Run(() =>
-            {
-                Recordset rs = null;
-                try
-                {
-                    rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+        //public async Task<int> CountErrorsAsync(string qValue, string year)
+        //{
+        //    return await Task.Run(() =>
+        //    {
+        //        Recordset rs = null;
+        //        try
+        //        {
+        //            rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
 
-                    // Actualizamos a '10' (Pendiente) todo lo que NO sea '20' (Exitoso) ni '10' (Ya pendiente)
-                    // Esto incluye '30', '40', '99', etc.
-                    string query = $@"
-                        UPDATE ""{DB_TABLE_NAME}"" 
-                        SET ""U_Estado"" = '10', 
-                            ""U_Notas"" = 'Reprocesamiento solicitado',
-                            ""U_Procesado"" = NULL
-                        WHERE ""U_Anio"" = '{year}' 
-                        AND ""Name"" = '{qValue}' 
-                        AND ""U_Estado"" NOT IN ('20', '10')";
-                    _logger.Info(query);
-                    rs.DoQuery(query);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"Error en ResetErrorRecordsAsync: {ex.Message}");
-                    throw;
-                }
-                finally
-                {
-                    if (rs != null) Marshal.ReleaseComObject(rs);
-                }
-            });
-        }
+        //            // Contamos registros que no estén en estado '20' (OK) ni '10' (Pendiente)
+        //            // Asumiendo que '30', '40', '99' son errores. 
+        //            // O si prefieres contar solo un estado específico, ajusta el WHERE.
+        //            string query = $@"
+        //                    SELECT COUNT(*) 
+        //                    FROM ""{DB_TABLE_NAME}""
+        //                    WHERE ""U_Anio"" = '{year}' 
+        //                    AND ""Name"" = '{qValue}'
+        //                    AND ""U_Estado"" NOT IN ('30', '20', '10', 'No Encontrado', 'Importado', 'Pendiente')";
+        //            _logger.Info(query);
+        //            rs.DoQuery(query);
 
+        //            if (!rs.EoF)
+        //            {
+        //                int count = int.Parse(rs.Fields.Item(0).Value.ToString());
+        //                _logger.Info(rs.Fields.Item(0).Value.ToString());
+        //                return count;
+        //            }
 
-        public async Task<int> CountErrorsAsync(string qValue, string year)
-        {
-            return await Task.Run(() =>
-            {
-                Recordset rs = null;
-                try
-                {
-                    rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+        //            return 0;
+        //        }
+        //        catch { return 0; }
+        //        finally { if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs); }
+        //    });
+        //}
 
-                    // Contamos registros que no estén en estado '20' (OK) ni '10' (Pendiente)
-                    // Asumiendo que '30', '40', '99' son errores. 
-                    // O si prefieres contar solo un estado específico, ajusta el WHERE.
-                    string query = $@"
-                            SELECT COUNT(*) 
-                            FROM ""@PADRON_SALTA_IMP"" 
-                            WHERE ""U_Anio"" = '{year}' 
-                            AND ""Name"" = '{qValue}'
-                            AND ""U_Estado"" NOT IN ('30', '20', '10', 'No Encontrado', 'Importado', 'Pendiente')";
-                    _logger.Info(query);
-                    rs.DoQuery(query);
-
-                    if (!rs.EoF)
-                    {
-                        int count = int.Parse(rs.Fields.Item(0).Value.ToString());
-                        _logger.Info(rs.Fields.Item(0).Value.ToString());
-                        return count;
-                    }
-
-                    return 0;
-                }
-                catch { return 0; }
-                finally { if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs); }
-            });
-        }
 
     }
 }

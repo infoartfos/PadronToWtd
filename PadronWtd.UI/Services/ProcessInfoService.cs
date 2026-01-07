@@ -43,10 +43,10 @@ namespace PadronWtd.UI.Services
             await LoadImpuestosCacheAsync();
 
             var stats = await _repository.GetStatsByAnioAsync(qValue, year);
-            int total = (stats.ContainsKey("Importado") ? stats["Importado"] : 0) +
-                        (stats.ContainsKey("Procesado") ? stats["Procesado"] : 0) +
-                        (stats.ContainsKey("No Encontrado") ? stats["No Encontrado"] : 0) +
-                        (stats.ContainsKey("Error") ? stats["Error"] : 0);
+            int total = (stats.ContainsKey("Importado") ? stats["Importado"] : 0) + (stats.ContainsKey("10") ? stats["10"] : 0) +
+                        (stats.ContainsKey("Procesado") ? stats["Procesado"] : 0) + (stats.ContainsKey("20") ? stats["20"] : 0) +
+                        (stats.ContainsKey("No Encontrado") ? stats["No Encontrado"] : 0) + (stats.ContainsKey("30") ? stats["30"] : 0) +
+                        (stats.ContainsKey("Error") ? stats["Error"] : 0) + (stats.ContainsKey("Error") ? stats["40"] : 0);
 
 
             await _repository.MarkNonExistentProvidersAsync(qValue, year);
@@ -111,7 +111,7 @@ namespace PadronWtd.UI.Services
 
                             string riskFlag = MapRiskToFlag(record.U_Riesgo);
 
-                            var execute = 4;
+                            var execute = 2;
                             if (execute==0)
                             {
                                 _logger.Info($"ExecutePrWtd3 taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},tipo:{tipo},record.U_Cuit:{record.U_Cuit},riskFlag:{riskFlag},rate:{rate},desde:{desde},hasta:{hasta}");
@@ -186,9 +186,9 @@ namespace PadronWtd.UI.Services
                         await SafeUpdateRecord(record, "40", $"Error: Insertando en WDT3", now);
                     }
 
-                    if (progress != null && i % 50 == 0)
+                    if (progress != null && i % 20 == 0)
                     {
-                        int percent = (int)((double)i / total * 100);
+                        int percent = (int)((double)i / recordCount * 100);
                         progress.Report(percent);
                     }
                 }

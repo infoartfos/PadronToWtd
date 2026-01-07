@@ -58,7 +58,7 @@ namespace PadronWtd.UI.Forms
                 AddButton("btnFecha", "Mantenimiento de Fecha", 70);
                 AddButton("btnImp", "Mantenimiento de Impuestos", 110);
                 AddButton("btnProc", "Importar y procesar", 150);
-                AddButton("btnTbl", "Ver tabla importación", 190);
+                //AddButton("btnTbl", "Ver tabla importación", 190);
 
                 _app.ItemEvent += App_ItemEvent;
                 _form.Visible = true;
@@ -97,13 +97,76 @@ namespace PadronWtd.UI.Forms
                         OnImportarClick();
                         break;
 
-                    case "btnTbl":
-                        ActivateMenuByTitle("Padron Salta", "Padron Salta");
-                        break;
+                    //case "btnTbl":
+                    //    ShowTableDataGrid("@PADRON_SALTA_IMP2");
+                    //    // ActivateMenuByTitle("Padron Salta", "Padrón Salta");
+                    //    break;
 
                     default:
                         break;
                 }
+            }
+        }
+
+        private void ShowTableDataGrid(string tableName)
+        {
+            Form oForm = null;
+            try
+            {
+                string gridFormUID = "fGridPadron";
+
+                // Intentar seleccionar si ya está abierto
+                try
+                {
+                    oForm = _app.Forms.Item(gridFormUID);
+                    oForm.Select();
+                    return;
+                }
+                catch { /* No existe, lo creamos */ }
+
+                // Parámetros de creación del formulario
+                FormCreationParams fcp = (FormCreationParams)_app.CreateObject(BoCreatableObjectType.cot_FormCreationParams);
+                fcp.UniqueID = gridFormUID;
+                fcp.BorderStyle = BoFormBorderStyle.fbs_Sizable;
+
+                oForm = _app.Forms.AddEx(fcp);
+                oForm.Title = "Explorador de Datos: " + tableName;
+                oForm.Width = 900;
+                oForm.Height = 500;
+
+                // 1. Agregar el ítem GRID al formulario
+                Item oItem = oForm.Items.Add("gdData", BoFormItemTypes.it_GRID);
+                oItem.Left = 10; oItem.Top = 10;
+                oItem.Width = 860; oItem.Height = 430;
+
+                // Hacer que el grid se auto-ajuste al redimensionar la ventana
+                oItem.FromPane = 0; oItem.ToPane = 0;
+                oItem.LinkTo = ""; // Opcional
+
+                Grid oGrid = (Grid)oItem.Specific;
+
+                // 2. Crear un DataTable para el Grid
+                DataTable oDataTable = oForm.DataSources.DataTables.Add("dtData");
+
+                // 3. Ejecutar la consulta (Usa comillas dobles para HANA)
+                // Limitamos a 5000 o algo razonable si el usuario quiere ver todo, 
+                // aunque el grid soporta mucho, 170k puede ser lento de renderizar.
+                oDataTable.ExecuteQuery($"SELECT * FROM \"{tableName}\" ORDER BY \"Code\" DESC");
+
+                // 4. Vincular el DataTable al Grid
+                oGrid.DataTable = oDataTable;
+
+                // 5. Opcional: Hacer que las columnas sean de solo lectura
+                for (int i = 0; i < oGrid.Columns.Count; i++)
+                {
+                    oGrid.Columns.Item(i).Editable = false;
+                }
+
+                oForm.Visible = true;
+            }
+            catch (Exception ex)
+            {
+                _app.StatusBar.SetText("Error al abrir vista de tabla: " + ex.Message, BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Error);
             }
         }
 
