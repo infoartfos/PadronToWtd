@@ -1,9 +1,6 @@
-﻿using PadronWtd.ServiceLayer;
-using PadronWtd.UI.DI;
-using PadronWtd.UI.Forms;   // donde está tu FrmImportarService
+﻿using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 using PadronWtd.UI.Services;
-using PadronWtd.UI.SL;      // donde está tu ServiceLayerClient
 using SAPbobsCOM;
 using System;
 using System.Runtime.InteropServices;
@@ -22,37 +19,49 @@ namespace PadronWtd.DebugRunner
 
         public void Run()
         {
+            // oCompany.LicenseServer = "hanab1:40000"; // No va en SAP B1 10.x
+            // Base de Datos y Credenciales
+            //oCompany.DbUserName = "USERINTDEV";
+            //oCompany.DbPassword = "Argentina2025!";
+            var pass = "1&ns$YI5";
             Company oCompany = null;
-
             try
             {
                 // ---------------------------------------------------------
                 // 1. Configuración de la Conexión
                 // ---------------------------------------------------------
                 oCompany = new Company();
-
+                Console.WriteLine("64 bit process: " + Environment.Is64BitProcess);
+                Console.WriteLine("DI API version: " + oCompany.MinimalSupportedVersion);
                 oCompany.DbServerType = BoDataServerTypes.dst_HANADB;
-                oCompany.Server = "hanab1:30013";  // Si cambio esto no hay cambios,   con xxxx tambien da  ERROR DE CONEXIÓN (-132): Error during SBO user authentication
+                oCompany.Server = "hanab1.sbo.contreras.com.ar";  // Si cambio esto no hay cambios,   con xxxx tambien da  ERROR DE CONEXIÓN (-132): Error during SBO user authentication
+                oCompany.SLDServer = "hanab1.sbo.contreras.com.ar:40000"; // Si descomento da error ERROR DE CONEXIÓN(100000060): B1 License Error Unknown error #100000060
 
-                oCompany.LicenseServer = "hanab1:40000";
-                // oCompany.SLDServer = "hanab1:40000"; // Si descomento da error ERROR DE CONEXIÓN(100000060): B1 License Error Unknown error #100000060
+                oCompany.Server = "10.250.2.10";  // Si cambio esto no hay cambios,   con xxxx tambien da  ERROR DE CONEXIÓN (-132): Error during SBO user authentication
+                oCompany.SLDServer = "10.250.2.10:40000"; // Si descomento da error ERROR DE CONEXIÓN(100000060): B1 License Error Unknown error #100000060
 
 
-                // Base de Datos y Credenciales
                 oCompany.CompanyDB = "SBP_SIOC_CHAR"; // ERROR DE CONEXIÓN (-132): Error during SBO user authentication
-                // oCompany.CompanyDB = "sbp_sioc_char"; // ERROR DE CONEXIÓN(100000060): B1 License Error Unknown error #100000060
-                // oCompany.CompanyDB = "NDB";           // ERROR DE CONEXIÓN (100000060): B1 License Error Unknown error #100000060
-                // oCompany.CompanyDB = "SBO_COMMON";    // ERROR DE CONEXIÓN (100000060): B1 License Error Unknown error #100000060
-
-                //oCompany.UserName = "desarrollos";     // Usuario de SAP B1
-                //oCompany.Password = "1&ns$YI5";        // Contraseña de SAP B1
-                oCompany.UserName = "USERINTDEV";     // Usuario de SAP B1
-                oCompany.Password = "Argentina2025!";        // Contraseña de SAP B1
+                oCompany.UserName = "DESARROLLOS"; // Usuario de SAP B1
+                oCompany.Password = pass;        // Contraseña de SAP B1
                 oCompany.UseTrusted = false;
                 oCompany.language = BoSuppLangs.ln_Spanish_La;
 
                 Console.WriteLine("Conectando a SAP Business One...");
                 _logger.Info("Conectando a SAP Business One...");
+
+                string connectString = $"Conexion a: " +
+                                             $"\n-Server:       {oCompany.Server} " +
+                                             $"\n-DbServerType: {oCompany.DbServerType} " +
+                                             $"\n-SLDServer:    {oCompany.SLDServer} " +
+                                             $"\n-CompanyDB:    {oCompany.CompanyDB} " +
+                                             $"\n-UserName:     {oCompany.UserName} " +
+                                             // $"\n-pass:         {pass} " +
+                                             $"\n-DbUserName:   {oCompany.DbUserName} " +
+                                             $"\n-LicenseServer:{oCompany.LicenseServer} ";
+                _logger.Info(connectString);
+
+
                 int returnCode = oCompany.Connect();
 
                 if (returnCode != 0)
@@ -60,6 +69,7 @@ namespace PadronWtd.DebugRunner
                     string errorMsg = oCompany.GetLastErrorDescription();
                     _logger.Info($"ERROR DE CONEXIÓN ({returnCode}): {errorMsg}");
                     Console.WriteLine($"ERROR DE CONEXIÓN ({returnCode}): {errorMsg}");
+                    Console.WriteLine($"({connectString})");
                     return;
                 }
                 _logger.Info($"Conectando a: {oCompany.Server} | SLD: {oCompany.SLDServer}...");

@@ -66,31 +66,34 @@ namespace PadronWtd.UI.Services
             }
         }
 
-        private Company ConnectNewSession()
+        public Company newCompany()
         {
             Company oCompany = new Company();
+            oCompany.DbServerType = (BoDataServerTypes)Enum.Parse(typeof(BoDataServerTypes), ConfigurationManager.AppSettings["SAP.DbServerType"]);
+            oCompany.Server = ConfigurationManager.AppSettings["SAP.Server"];
+            oCompany.LicenseServer = ConfigurationManager.AppSettings["SAP.LicenseServer"];
+            oCompany.CompanyDB = ConfigurationManager.AppSettings["SAP.CompanyDB"];
+            oCompany.UserName = ConfigurationManager.AppSettings["SAP.UserName"];
+
+            // Desencriptación de la clave
+            string encryptedPass = ConfigurationManager.AppSettings["SAP.Password"];
+            oCompany.Password = EncryptionHelper.Decrypt(encryptedPass);
+            var pass = EncryptionHelper.Decrypt(encryptedPass);
+
+            oCompany.DbUserName = "USERINTDEV";
+            oCompany.DbPassword = "Argentina2025!";
+
+            oCompany.UseTrusted = false;
+            oCompany.language = BoSuppLangs.ln_Spanish_La;
+            return oCompany;
+        }
+
+
+        private Company ConnectNewSession()
+        {
+            Company oCompany = newCompany();
             try
             {
-                oCompany.DbServerType = (BoDataServerTypes)Enum.Parse(typeof(BoDataServerTypes), ConfigurationManager.AppSettings["SAP.DbServerType"]);
-                oCompany.Server = ConfigurationManager.AppSettings["SAP.Server"];
-                oCompany.LicenseServer = ConfigurationManager.AppSettings["SAP.LicenseServer"];
-                oCompany.CompanyDB = ConfigurationManager.AppSettings["SAP.CompanyDB"];
-                //oCompany.UserName = ConfigurationManager.AppSettings["SAP.UserName"];
-
-                // Desencriptación de la clave
-                string encryptedPass = ConfigurationManager.AppSettings["SAP.Password"];
-                oCompany.Password = EncryptionHelper.Decrypt(encryptedPass);
-
-                //oCompany.UserName = "GSCHNEIDER";
-                //oCompany.Password = "TzLt3#MA";
-
-                //oCompany.DbUserName = "USERINTDEV";
-                //oCompany.DbPassword = "Argentina2025!";
-
-                oCompany.UseTrusted = false;
-                oCompany.language = BoSuppLangs.ln_Spanish_La;
-
-
                 int result = oCompany.Connect();
                 if (result != 0)
                 {
@@ -103,6 +106,7 @@ namespace PadronWtd.UI.Services
                                                  $"\n-DbServerType: {oCompany.DbServerType} " +
                                                  $"\n-CompanyDB: {oCompany.CompanyDB} " +
                                                  $"\n-UserName: {oCompany.UserName} " +
+                                                 // $"\n-pass: {pass} " +
                                                  $"\n-DbUserName: {oCompany.DbUserName} " +
                                                  $"\n-LicenseServer: {oCompany.LicenseServer} ";
                     _logger.Info(connectString);

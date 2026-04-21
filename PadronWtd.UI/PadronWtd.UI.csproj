@@ -137,6 +137,9 @@
     <Compile Include="SL\PSaltaDto.cs" />
     <Compile Include="SL\SapPSaltaService.cs" />
     <Compile Include="SL\ServiceLayerClient.cs" />
+    <Compile Include="DebugRunner\ImportRunner.cs" />
+	<Compile Include="DebugRunner\LeerPadronRunner.cs" />
+	<Compile Include="DebugRunner\LeerPadronRunnerAddOn.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>

@@ -1,4 +1,5 @@
-﻿using PadronWtd.UI.DI;
+﻿using PadronWtd.DebugRunner;
+using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 using SAPbouiCOM;
 using System;
@@ -29,8 +30,8 @@ namespace PadronWtd.UI
 
                     _logger.Info("=== DEBUG ARRANCANDO ====");
                     // var runner = new ImportRunner();
-                    // var runner = new LeerPadronRunner();
-                    //runner.Run();
+                    var runner = new LeerPadronRunner();
+                    runner.Run();
                     _logger.Info("=== TERMINO  ====");
 
                     Environment.Exit(0);

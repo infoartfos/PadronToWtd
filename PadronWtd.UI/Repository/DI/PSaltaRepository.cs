@@ -15,7 +15,7 @@ namespace PadronWtd.Repository.DI
     {
         private readonly ILogger _logger;
         private readonly Company _company;
-        private const string TABLE_NAME = "PADRON_SALTA_IMP2";
+        private const string TABLE_NAME = "PADRON_SALTA_IMP3";
         private const string DB_TABLE_NAME = "@" + TABLE_NAME;
 
         public PSaltaRepository(Company company)
