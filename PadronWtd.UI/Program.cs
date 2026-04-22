@@ -72,9 +72,6 @@ namespace PadronWtd.UI
             }
         }
 
-        public static SAPbouiCOM.Form oForm;
-        public static SAPbouiCOM.Item oItem;
-
         static void SBO_Application_AppEvent(SAPbouiCOM.BoAppEventTypes EventType)
         {
             switch (EventType)

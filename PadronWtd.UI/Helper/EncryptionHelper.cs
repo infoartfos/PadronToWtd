@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 
 public static class EncryptionHelper
 {
-    private static string key = "Padr0nWtd_Secret_Key";
+    //private static string key = "Padr0nWtd_Secret_Key";
 
     public static string Decrypt(string cipherText)
     {
