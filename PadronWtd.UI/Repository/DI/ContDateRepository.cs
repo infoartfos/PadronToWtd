@@ -79,9 +79,6 @@ namespace PadronWtd.Repository.DI
             });
         }
 
-        // -----------------------------------------------------------------------
-        // Consulta de Fechas (Idéntica estructura a Impuestos según tu pedido)
-        // -----------------------------------------------------------------------
         public async Task<List<ContDateRecord>> GetFechasAsync()
         {
             return await Task.Run(() =>
