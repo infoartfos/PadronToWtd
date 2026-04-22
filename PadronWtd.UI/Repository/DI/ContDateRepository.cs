@@ -41,10 +41,10 @@ namespace PadronWtd.Repository.DI
                             T1.""U_Periodo"", 
                             T1.""U_Desde"", 
                             T1.""U_Hasta"", 
-                            T1.""U_Activo"" 
+                            T1.""U_Activo"",
+                            T0.""U_Detalle"" AS ""Year""
                         FROM ""@CONT_DATE_CAB"" T0, ""@CONT_DATE_DET"" T1
-                        -- SUGERENCIA: Descomentar la siguiente línea si se duplican los datos
-                        -- WHERE T0.""Code"" = T1.""Code""
+                        WHERE T0.""Code"" = T1.""Code""
                     ";
 
                     rs.DoQuery(query);
@@ -79,9 +79,6 @@ namespace PadronWtd.Repository.DI
             });
         }
 
-        // -----------------------------------------------------------------------
-        // Consulta de Fechas (Idéntica estructura a Impuestos según tu pedido)
-        // -----------------------------------------------------------------------
         public async Task<List<ContDateRecord>> GetFechasAsync()
         {
             return await Task.Run(() =>
@@ -96,7 +93,7 @@ namespace PadronWtd.Repository.DI
                     string query = @"
                         SELECT 
                             T0.""Code"" AS ""HeaderCode"", 
-                            T0.""Name"" AS ""Year"",
+                            T0.""U_Detalle"" AS ""Year"",
                             T1.""Code"" AS ""DetailCode"", 
                             T1.""U_Periodo"", 
                             T1.""U_Desde"", 
@@ -156,7 +153,7 @@ namespace PadronWtd.Repository.DI
                         SELECT T1.""Code"", T1.""LineId""
                         FROM ""@CONT_DATE_CAB"" T0
                         INNER JOIN ""@CONT_DATE_DET"" T1 ON T0.""Code"" = T1.""Code""
-                        WHERE T0.""Name"" = '{year}' 
+                        WHERE T0.""U_Detalle"" = '{year}' 
                         AND T1.""U_Periodo"" = '{qValue}'";
 
                     rs.DoQuery(findQuery);

@@ -97,10 +97,9 @@ namespace PadronWtd.UI.Forms
                         OnImportarClick();
                         break;
 
-                    //case "btnTbl":
-                    //    ShowTableDataGrid("@PADRON_SALTA_IMP2");
-                    //    // ActivateMenuByTitle("Padron Salta", "Padrón Salta");
-                    //    break;
+                    case "btnTbl":
+                        ShowTableDataGrid("@PADRON_SALTA_IMP3");
+                        break;
 
                     default:
                         break;
@@ -115,7 +114,6 @@ namespace PadronWtd.UI.Forms
             {
                 string gridFormUID = "fGridPadron";
 
-                // Intentar seleccionar si ya está abierto
                 try
                 {
                     oForm = _app.Forms.Item(gridFormUID);
@@ -124,7 +122,6 @@ namespace PadronWtd.UI.Forms
                 }
                 catch { /* No existe, lo creamos */ }
 
-                // Parámetros de creación del formulario
                 FormCreationParams fcp = (FormCreationParams)_app.CreateObject(BoCreatableObjectType.cot_FormCreationParams);
                 fcp.UniqueID = gridFormUID;
                 fcp.BorderStyle = BoFormBorderStyle.fbs_Sizable;
@@ -148,9 +145,6 @@ namespace PadronWtd.UI.Forms
                 // 2. Crear un DataTable para el Grid
                 DataTable oDataTable = oForm.DataSources.DataTables.Add("dtData");
 
-                // 3. Ejecutar la consulta (Usa comillas dobles para HANA)
-                // Limitamos a 5000 o algo razonable si el usuario quiere ver todo, 
-                // aunque el grid soporta mucho, 170k puede ser lento de renderizar.
                 oDataTable.ExecuteQuery($"SELECT * FROM \"{tableName}\" ORDER BY \"Code\" DESC");
 
                 // 4. Vincular el DataTable al Grid

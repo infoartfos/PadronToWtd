@@ -33,7 +33,7 @@ namespace PadronWtd.UI.Forms
         // --- Dependencias ---
         private readonly SAPbouiCOM.Application _application;
         private readonly ILogger _logger;
-        private readonly FileImportService _importService;
+        private readonly FileImportService _importFileService;
         private readonly PeriodosService _periodosService;
         private readonly PSaltaRepository _repository;
         private readonly SAPbobsCOM.Company _company;
@@ -41,7 +41,7 @@ namespace PadronWtd.UI.Forms
         // --- Estado y Colas ---
         private readonly ConcurrentQueue<string> _filePathQueue = new ConcurrentQueue<string>();
         private Form _oForm;
-        private ComboBox _cmb;
+        private ComboBox _cmbPeriodo;
         private SAPbouiCOM.Button _btnProc;
         private SAPbouiCOM.Button _btnReproc;
 
@@ -66,7 +66,7 @@ namespace PadronWtd.UI.Forms
             _logger = SimpleServiceProvider.Get<ILogger>();
             try
             {
-                _importService = new FileImportService();
+                _importFileService = new FileImportService();
             }
             catch (Exception ex)
             {
@@ -164,7 +164,7 @@ namespace PadronWtd.UI.Forms
             // 1. Periodo
             top += spacing;
             AddLabel("lblPer", "Período a Procesar:", left, top);
-            _cmb = AddComboBox(CmbPeriodoID, left + lblWidth, top, fieldWidth);
+            _cmbPeriodo = AddComboBox(CmbPeriodoID, left + lblWidth, top, fieldWidth);
 
             // 2. Archivo
             top += spacing;
@@ -193,7 +193,7 @@ namespace PadronWtd.UI.Forms
             var l3 = AddLabel(LblLine3ID, "", left, top); l3.Item.Width = 450;
 
             // Carga inicial y arranque del Timer
-            _ = LoadPeriodosAsync(_cmb);
+            _ = LoadPeriodosAsync(_cmbPeriodo);
             StartQueueTimer();
         }
 
@@ -398,7 +398,7 @@ namespace PadronWtd.UI.Forms
 
             try
             {
-                string valPeriodo = _cmb.Value;
+                string valPeriodo = _cmbPeriodo.Value;
                 var parts = valPeriodo.Split(' ');
                 if (parts.Length < 2) return;
 
@@ -441,7 +441,7 @@ namespace PadronWtd.UI.Forms
                     _application.StatusBar.SetText($"Importando... {pct}%", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
                 });
 
-                int count = await _importService.ProcessImportAsync(filePath, year, qValue, importReporter);
+                int count = await _importFileService.ProcessImportAsync(filePath, year, qValue, importReporter);
 
                 if (count > 0)
                 {
@@ -513,7 +513,7 @@ namespace PadronWtd.UI.Forms
             UpdateResultLabels(txtTotal, txtOk, txtError);
 
             await CheckErrorsAndToggleBtnAsync(year, qValue);
-            _ = LoadPeriodosAsync(_cmb);
+            _ = LoadPeriodosAsync(_cmbPeriodo);
 
             _application.MessageBox($"Proceso Finalizado.\n{txtTotal}\n{txtOk}\n{txtError}");
         }
@@ -537,7 +537,7 @@ namespace PadronWtd.UI.Forms
             UpdateResultLabels(txtTotal, txtOk, txtError);
 
             await CheckErrorsAndToggleBtnAsync(year, qValue);
-            _ = LoadPeriodosAsync(_cmb);
+            _ = LoadPeriodosAsync(_cmbPeriodo);
 
             _application.MessageBox($"Proceso Finalizado.\n{txtTotal}\n{txtOk}\n{txtError}");
         }
@@ -579,7 +579,7 @@ namespace PadronWtd.UI.Forms
         {
             try
             {
-                string valPeriodo = _cmb.Value;
+                string valPeriodo = _cmbPeriodo.Value;
                 if (string.IsNullOrEmpty(valPeriodo)) return;
 
                 var parts = valPeriodo.Split(' ');

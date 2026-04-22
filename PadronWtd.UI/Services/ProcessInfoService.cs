@@ -16,7 +16,7 @@ namespace PadronWtd.UI.Services
     public class ProcessInfoService
     {
         private readonly ILogger _logger;
-        private readonly PSaltaRepository _repository;
+        private readonly PSaltaRepository _impSaltaRepository;
         private readonly SaltaConfigRepository _configRepository;
         private readonly ContDateRepository _contDateRepository;
         private readonly Company _company;
@@ -28,7 +28,7 @@ namespace PadronWtd.UI.Services
             _logger = SimpleServiceProvider.Get<ILogger>();
 
             _company = SapConnectionManager.Instance.GetCompany(forceServiceUser);
-            _repository = new PSaltaRepository(_company);
+            _impSaltaRepository = new PSaltaRepository(_company);
             _configRepository = new SaltaConfigRepository(_company);
             _contDateRepository = new ContDateRepository(_company);
         }
@@ -42,16 +42,16 @@ namespace PadronWtd.UI.Services
 
             await LoadImpuestosCacheAsync();
 
-            var stats = await _repository.GetStatsByAnioAsync(qValue, year);
+            var stats = await _impSaltaRepository.GetStatsByAnioAsync(qValue, year);
             int total = (stats.ContainsKey("Importado") ? stats["Importado"] : 0) + (stats.ContainsKey("10") ? stats["10"] : 0) +
                         (stats.ContainsKey("Procesado") ? stats["Procesado"] : 0) + (stats.ContainsKey("20") ? stats["20"] : 0) +
                         (stats.ContainsKey("No Encontrado") ? stats["No Encontrado"] : 0) + (stats.ContainsKey("30") ? stats["30"] : 0) +
                         (stats.ContainsKey("Error") ? stats["Error"] : 0) + (stats.ContainsKey("Error") ? stats["40"] : 0);
 
 
-            await _repository.MarkNonExistentProvidersAsync(qValue, year);
+            await _impSaltaRepository.MarkNonExistentProvidersAsync(qValue, year);
 
-            List<PSaltaRecord> records = await _repository.GetByAnioAsync(qValue, year);
+            List<PSaltaRecord> records = await _impSaltaRepository.GetByAnioAsync(qValue, year);
 
             if (records == null || records.Count == 0)
             {
@@ -107,7 +107,7 @@ namespace PadronWtd.UI.Services
                             {
                                 taxEntry = 1; // Valor por defecto si viene vacío o no es número
                             }
-                            int linea = _repository.GetNextLineId(taxEntry);
+                            int linea = _impSaltaRepository.GetNextLineId(taxEntry);
 
                             string riskFlag = MapRiskToFlag(record.U_Riesgo);
 
@@ -115,7 +115,7 @@ namespace PadronWtd.UI.Services
                             if (execute==0)
                             {
                                 _logger.Info($"ExecutePrWtd3 taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},tipo:{tipo},record.U_Cuit:{record.U_Cuit},riskFlag:{riskFlag},rate:{rate},desde:{desde},hasta:{hasta}");
-                                _repository.ExecutePrWtd3(
+                                _impSaltaRepository.ExecutePrWtd3(
                                     _company,
                                     taxEntry,
                                     linea,
@@ -130,7 +130,7 @@ namespace PadronWtd.UI.Services
                             } else if (execute==1) {
 
                                 _logger.Info($"ExecuteSpInsertWtd3 taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},record.U_Cuit:{record.U_Cuit},desde:{desde},hasta:{hasta},80,tipo:{tipo}");
-                                _repository.ExecuteSpInsertWtd3(
+                                _impSaltaRepository.ExecuteSpInsertWtd3(
                                     _company,
                                     taxEntry,
                                     linea,
@@ -144,7 +144,7 @@ namespace PadronWtd.UI.Services
                             } else if (execute == 2) {
 
                                 _logger.Info($"InsertWtd3Direct taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},record.U_Cuit:{record.U_Cuit},desde:{desde},hasta:{hasta},80,tipo:{tipo}");
-                                _repository.InsertWtd3Direct(
+                                _impSaltaRepository.InsertWtd3Direct(
                                     _company,
                                     taxEntry,    
                                     linea,      
@@ -157,7 +157,7 @@ namespace PadronWtd.UI.Services
                                 );
                             } else if (execute == 3)
                             {
-                                _repository.UpsertWtd3Direct(
+                                _impSaltaRepository.UpsertWtd3Direct(
                                     _company,
                                     taxEntry, 
                                     item.CodigoSap,    
@@ -171,7 +171,7 @@ namespace PadronWtd.UI.Services
                             { // execute == 4 
                                 //        public void ExecutePrWtd3Logic(Company company, string entryStr, string wtCode, string tipo, string cuit, string risk, double rate, DateTime desde, DateTime hasta)
                                 _logger.Info($"ExecutePrWtd3Logic entryStr:{item.U_Codigo},wtCode:{item.CodigoSap}, tipo:{tipo},cuit:{record.U_Cuit},risk:N,rate:{rate},desde:{desde},hasta:{hasta}");
-                                _repository.ExecutePrWtd3Logic(_company, item.U_Codigo, item.CodigoSap, tipo, record.U_Cuit, "N", rate, desde, hasta);
+                                _impSaltaRepository.ExecutePrWtd3Logic(_company, item.U_Codigo, item.CodigoSap, tipo, record.U_Cuit, "N", rate, desde, hasta);
                             }
                             processedCodes += item.CodigoSap + " ";
                         }
@@ -229,7 +229,7 @@ namespace PadronWtd.UI.Services
 
                 record.U_Notas = notas;
 
-                await _repository.UpdateAsync(record);
+                await _impSaltaRepository.UpdateAsync(record);
             }
             catch (Exception ex)
             {
