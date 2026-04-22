@@ -33,7 +33,7 @@ namespace PadronWtd.UI.Forms
         // --- Dependencias ---
         private readonly SAPbouiCOM.Application _application;
         private readonly ILogger _logger;
-        private readonly FileImportService _importService;
+        private readonly FileImportService _importFileService;
         private readonly PeriodosService _periodosService;
         private readonly PSaltaRepository _repository;
         private readonly SAPbobsCOM.Company _company;
@@ -66,7 +66,7 @@ namespace PadronWtd.UI.Forms
             _logger = SimpleServiceProvider.Get<ILogger>();
             try
             {
-                _importService = new FileImportService();
+                _importFileService = new FileImportService();
             }
             catch (Exception ex)
             {
@@ -441,7 +441,7 @@ namespace PadronWtd.UI.Forms
                     _application.StatusBar.SetText($"Importando... {pct}%", BoMessageTime.bmt_Short, BoStatusBarMessageType.smt_Warning);
                 });
 
-                int count = await _importService.ProcessImportAsync(filePath, year, qValue, importReporter);
+                int count = await _importFileService.ProcessImportAsync(filePath, year, qValue, importReporter);
 
                 if (count > 0)
                 {
