@@ -128,9 +128,7 @@
     <Compile Include="Repository\DI\SapConnectionManager.cs" />
     <Compile Include="Repository\SL\PSaltaRepository.cs" />
     <Compile Include="Services\FileImportService.cs" />
-    <Compile Include="Services\FrmImportarService.cs" />
     <Compile Include="Services\IImportService.cs" />
-    <Compile Include="Services\PadronService.cs" />
     <Compile Include="Services\PeriodosService.cs" />
     <Compile Include="Services\ProcessInfoService.cs" />
     <Compile Include="SL\HttpDebug.cs" />
