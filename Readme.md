@@ -1,13 +1,11 @@
+# Importador datos de Padrón Salta
 
+## Archivo de log
 
+El log se hace en el archivo:
 
+`padron_import.log`
 
-dotnet run --project PadronWtd.Cli -- import --file C:\archivo.tsv --run 4 --user svc
+probablemente se encuentre en:
 
-
-Correr ejecutable 
-
-(desde el home de la Solución)
-
-.\PadronWtd.Cli\bin\Debug\net8.0\PadronWtd.Cli.exe import .\etc\padron.csv
-
+`C:\ProgramData\PadronWtd\padron_import.log`
