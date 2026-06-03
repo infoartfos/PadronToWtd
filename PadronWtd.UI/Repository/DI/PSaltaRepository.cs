@@ -143,7 +143,7 @@ namespace PadronWtd.Repository.DI
             });
         }
 
-        public async Task<List<PSaltaRecord>> GetByAnioAsync(string q_value, string anio)
+        public async Task<List<PSaltaRecord>> GetImportadosYErrorByPeriodoAnioAsync(string q_value, string anio)
         {
             return await Task.Run(() =>
             {
@@ -153,18 +153,16 @@ namespace PadronWtd.Repository.DI
                 try
                 {
                     recordset = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-                    // Quitamos DocEntry, Canceled, Object, UserSign, CreateDate, DataSource 
-                    // porque no existen en tablas tipo "Ninguno"
                     string query = $@"
-                SELECT 
-                    ""Code"", ""Name"", 
-                    ""U_Anio"", ""U_Padron"", ""U_Cuit"", ""U_Inscripcion"", 
-                    ""U_Riesgo"", ""U_Notas"", ""U_Procesado"", ""U_Estado""
-                FROM ""{DB_TABLE_NAME}"" 
-                WHERE ""U_Anio"" = '{anio}'
-                AND ""Name"" = '{q_value}'
-                AND (""U_Estado"" = 'Importado' OR ""U_Estado"" = '10' OR ""U_Estado"" = 'Error' OR ""U_Estado"" = '40')
-                ORDER BY ""Code"" ASC";
+                                    SELECT 
+                                        ""Code"", ""Name"", 
+                                        ""U_Anio"", ""U_Padron"", ""U_Cuit"", ""U_Inscripcion"", 
+                                        ""U_Riesgo"", ""U_Notas"", ""U_Procesado"", ""U_Estado""
+                                    FROM ""{DB_TABLE_NAME}"" 
+                                    WHERE ""U_Anio"" = '{anio}'
+                                    AND ""Name"" = '{q_value}'
+                                    AND (""U_Estado"" = 'Importado' OR ""U_Estado"" = '10' OR ""U_Estado"" = 'Error' OR ""U_Estado"" = '40')
+                                    ORDER BY ""Code"" ASC";
 
                     _logger.Info($"Ejecutando lectura para procesamiento...");
                     recordset.DoQuery(query);
@@ -191,7 +189,7 @@ namespace PadronWtd.Repository.DI
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"Error en GetByAnioAsync: {ex.Message}");
+                    _logger.Error($"Error en GetImportadosYErrorByPeriodoAnioAsync: {ex.Message}");
                     throw;
                 }
                 finally
@@ -506,40 +504,6 @@ namespace PadronWtd.Repository.DI
             }
         }
 
-
-        //public async Task<List<PSaltaRecord>> GetByAnioAsync(string q_value, string anio)
-        //{
-        //    return await Task.Run(() =>
-        //    {
-        //        var records = new List<PSaltaRecord>();
-        //        Recordset rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-        //        try
-        //        {
-        //            string query = $@"SELECT * FROM ""{DB_TABLE_NAME}"" WHERE ""U_Anio""='{anio}' AND ""Name""='{q_value}'
-        //                             AND ""U_Estado"" IN ('Importado','10','Error','40') ORDER BY ""DocEntry"" ASC";
-        //            rs.DoQuery(query);
-        //            while (!rs.EoF)
-        //            {
-        //                records.Add(new PSaltaRecord
-        //                {
-        //                    Code = GetValue(rs, "Code"),
-        //                    Name = GetValue(rs, "Name"),
-        //                    U_Anio = GetValue(rs, "U_Anio"),
-        //                    U_Padron = GetValue(rs, "U_Padron"),
-        //                    U_Cuit = GetValue(rs, "U_Cuit"),
-        //                    U_Inscripcion = GetValue(rs, "U_Inscripcion"),
-        //                    U_Riesgo = GetValue(rs, "U_Riesgo"),
-        //                    U_Notas = GetValue(rs, "U_Notas"),
-        //                    U_Procesado = GetValue(rs, "U_Procesado"),
-        //                    U_Estado = GetValue(rs, "U_Estado")
-        //                });
-        //                rs.MoveNext();
-        //            }
-        //        }
-        //        finally { Marshal.ReleaseComObject(rs); }
-        //        return records;
-        //    });
-        //}
         public async Task<Dictionary<string, int>> GetStatsByAnioAsync(string qValue, string year)
         {
             return await Task.Run(() =>

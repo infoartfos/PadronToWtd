@@ -34,171 +34,187 @@ namespace PadronWtd.UI.Services
         }
 
         
-        public async Task<ProcessResult> ProcessRecordsAsync(string qValue, string year, IProgress<int> progress = null)
+        public async Task<ProcessResult> ProcessRecordsAsync(string qPeriodo, string year, IProgress<int> progress = null)
         {
-            _logger.Info($"Iniciando procesamiento para {year} - {qValue}...");
-
+            _logger.Info($"Iniciando procesamiento para {year} - {qPeriodo}...");
             var result = new ProcessResult();
 
             await LoadImpuestosCacheAsync();
 
-            var stats = await _impSaltaRepository.GetStatsByAnioAsync(qValue, year);
-            int total = (stats.ContainsKey("Importado") ? stats["Importado"] : 0) + (stats.ContainsKey("10") ? stats["10"] : 0) +
-                        (stats.ContainsKey("Procesado") ? stats["Procesado"] : 0) + (stats.ContainsKey("20") ? stats["20"] : 0) +
-                        (stats.ContainsKey("No Encontrado") ? stats["No Encontrado"] : 0) + (stats.ContainsKey("30") ? stats["30"] : 0) +
-                        (stats.ContainsKey("Error") ? stats["Error"] : 0) + (stats.ContainsKey("Error") ? stats["40"] : 0);
+            // 1. Calcular totales iniciales de control
+            result.TotalRegistros = await CalculateTotalRecordsAsync(qPeriodo, year);
 
+            await _impSaltaRepository.MarkNonExistentProvidersAsync(qPeriodo, year);
 
-            await _impSaltaRepository.MarkNonExistentProvidersAsync(qValue, year);
-
-            List<PSaltaRecord> records = await _impSaltaRepository.GetByAnioAsync(qValue, year);
-
-            if (records == null || records.Count == 0)
+            // 2. Obtener lote de registros a procesar
+            List<PSaltaRecord> records = await _impSaltaRepository.GetImportadosYErrorByPeriodoAnioAsync(qPeriodo, year);
+            if (records == null || !records.Any())
             {
                 _logger.Warn("No se encontraron registros para procesar.");
                 return result;
             }
 
-            result.TotalRegistros = total;
-            (DateTime desde, DateTime hasta) = await GetDynamicDates(year, qValue);
+            (DateTime desde, DateTime hasta) = await GetDynamicDates(qPeriodo, year);
+            
+            // 3. Procesamiento del lote (Excluimos Task.Run innecesario para no matar el contexto del SDK)
+            var (successCount, errorCount) = await ProcessRecordListAsync(records, desde, hasta, progress);
 
+            // 4. Cierre del proceso
+            progress?.Report(100);
+            await _contDateRepository.DeactivatePeriodAsync(year, qPeriodo);
+
+            result.RegistrosConError = errorCount;
+            result.ProcesadosExitosos = successCount; 
+
+            _logger.Info($"Procesamiento finalizado. Total lote: {records.Count}, Exitosos: {successCount}, Errores: {errorCount}");
+            return result;
+        }
+
+        private async Task<int> CalculateTotalRecordsAsync(string qPeriodo, string year)
+        {
+            var stats = await _impSaltaRepository.GetStatsByAnioAsync(qPeriodo, year);
+            string[] keys = { "Importado", "10", "Procesado", "20", "No Encontrado", "30", "Error", "40" };
+            return keys.Sum(key => stats.TryGetValue(key, out int value) ? value : 0);
+        }
+
+        private async Task<(int successCount, int errorCount)> ProcessRecordListAsync(
+            List<PSaltaRecord> records, DateTime desde, DateTime hasta, IProgress<int> progress)
+        {
             int successCount = 0;
             int errorCount = 0;
-            int recordCount = records.Count();
+            int total = records.Count;
+            string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
-            await Task.Run(async () =>
+            for (int i = 0; i < total; i++)
             {
-                var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                var record = records[i];
+                bool isProcessed = await ProcessSingleRecordAsync(record, desde, hasta, timestamp);
 
-                for (int i = 0; i < recordCount; i++)
+                if (isProcessed) successCount++;
+                else errorCount++;
+
+                if (progress != null && i % 20 == 0)
                 {
-                    var record = records[i];
+                    progress.Report((int)((double)i / total * 100));
+                }
+            }
 
-                    try
+            return (successCount, errorCount);
+        }
+
+
+        private async Task<bool> ProcessSingleRecordAsync(PSaltaRecord record, DateTime desde, DateTime hasta, string timestamp)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(record.U_Cuit))
+                    throw new ArgumentException("El registro no tiene CUIT.");
+
+                if (!CuitExistsInSap(record.U_Cuit))
+                {
+                    _logger.Warn($"Proveedor con CUIT {record.U_Cuit} no existe. Omitiendo.");
+                    await SafeUpdateRecord(record, "30", "Proveedor No Existe", timestamp);
+                    return false;
+                }
+
+                List<ImpuestoCacheItem> taxItems = GetWhtCodesFromCache(record.U_Inscripcion, record.U_Riesgo);
+                if (!taxItems.Any())
+                {
+                    _logger.Warn($"No existe configuración para Insc: {record.U_Inscripcion} / Riesgo: {record.U_Riesgo}");
+                    await SafeUpdateRecord(record, "40", "Configuración Impuesto No Encontrada", timestamp);
+                    return false;
+                }
+
+                // Procesar inserciones
+                foreach (var item in taxItems)
+                {
+                    int taxEntry = int.TryParse(item.U_Codigo, out int parsed) ? parsed : 1;
+                    // int linea = _impSaltaRepository.GetNextLineId(taxEntry);
+                    // ExecuteInsertWtd3(taxEntry, linea, item.CodigoSap, record.U_Cuit, desde, hasta);
+                    ExecuteInsertWtd3ViaDIAPI(taxEntry, item.CodigoSap, record.U_Cuit, desde, hasta);
+
+                }
+
+                // Obtener códigos en una sola línea limpia para el log final
+                string processedCodes = string.Join(" ", taxItems.Select(x => x.CodigoSap));
+
+                await SafeUpdateRecord(record, "20", $"Procesado OK. Códigos: {processedCodes}", timestamp);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error procesando CUIT {record.U_Cuit}: {ex.Message} {ex.StackTrace}");
+                await SafeUpdateRecord(record, "40", $"{ex.Message}", timestamp);
+                return false;
+            }
+        }
+
+        private void ExecuteInsertWtd3ViaDIAPI(int taxEntry, string codigoSap, string cuit, DateTime desde, DateTime hasta)
+        {
+            _logger.Info($"InsertWtd3ViaDIAPI - taxEntry (AbsEntry): {taxEntry}, WTCode: {codigoSap}, CUIT: {cuit}");
+
+            // 1. Obtener el objeto de Retenciones
+            SAPbobsCOM.WithholdingTaxCodes oWTCode = (SAPbobsCOM.WithholdingTaxCodes)_company.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oWithholdingTaxCodes);
+
+            try
+            {
+                // CORRECCIÓN 1: Convertir el int a string para el GetByKey
+                if (oWTCode.GetByKey(taxEntry.ToString()))
+                {
+                    // CORRECCIÓN 2: Uso de propiedades correctas de la DI API (OfficialCode en lugar de WTCode)
+                    if (oWTCode.Lines.Count > 0 && !string.IsNullOrEmpty(oWTCode.Lines.OfficialCode))
                     {
-                        if (string.IsNullOrEmpty(record.U_Cuit))
-                            throw new Exception("El registro no tiene CUIT.");
-
-                        if (!CuitExistsInSap(record.U_Cuit))
-                        {
-                            _logger.Warn($"Proveedor con CUIT {record.U_Cuit} no existe. Omitiendo.");
-                            await SafeUpdateRecord(record, "30", "Proveedor No Existe", now);
-                            errorCount++;
-                            continue;
-                        }
-
-                        List<ImpuestoCacheItem> taxItems = GetWhtCodesFromCache(record.U_Inscripcion, record.U_Riesgo);
-
-                        if (taxItems.Count == 0)
-                        {
-                            _logger.Warn($"No existe configuración para Insc: {record.U_Inscripcion} / Riesgo: {record.U_Riesgo}");
-                            await SafeUpdateRecord(record, "40", "Configuración Impuesto No Encontrada", now);
-                            errorCount++;
-                            continue;
-                        }
-
-                        string processedCodes = "";
-
-                        foreach (var item in taxItems)
-                        {
-                            string tipo = "A";
-                            double rate = 0.0;
-                            if (!int.TryParse(item.U_Codigo, out int taxEntry))
-                            {
-                                taxEntry = 1; // Valor por defecto si viene vacío o no es número
-                            }
-                            int linea = _impSaltaRepository.GetNextLineId(taxEntry);
-
-                            string riskFlag = MapRiskToFlag(record.U_Riesgo);
-
-                            var execute = 2;
-                            if (execute==0)
-                            {
-                                _logger.Info($"ExecutePrWtd3 taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},tipo:{tipo},record.U_Cuit:{record.U_Cuit},riskFlag:{riskFlag},rate:{rate},desde:{desde},hasta:{hasta}");
-                                _impSaltaRepository.ExecutePrWtd3(
-                                    _company,
-                                    taxEntry,
-                                    linea,
-                                    item.CodigoSap,
-                                    tipo,
-                                    record.U_Cuit,
-                                    riskFlag,
-                                    rate,
-                                    desde,
-                                    hasta
-                                );
-                            } else if (execute==1) {
-
-                                _logger.Info($"ExecuteSpInsertWtd3 taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},record.U_Cuit:{record.U_Cuit},desde:{desde},hasta:{hasta},80,tipo:{tipo}");
-                                _impSaltaRepository.ExecuteSpInsertWtd3(
-                                    _company,
-                                    taxEntry,
-                                    linea,
-                                    item.CodigoSap,
-                                    record.U_Cuit,
-                                    desde,
-                                    hasta,
-                                    "80",
-                                    tipo
-                                );
-                            } else if (execute == 2) {
-
-                                _logger.Info($"InsertWtd3Direct taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{item.CodigoSap},record.U_Cuit:{record.U_Cuit},desde:{desde},hasta:{hasta},80,tipo:{tipo}");
-                                _impSaltaRepository.InsertWtd3Direct(
-                                    _company,
-                                    taxEntry,    
-                                    linea,      
-                                    item.CodigoSap, 
-                                    record.U_Cuit,
-                                    desde,
-                                    hasta,
-                                    "80",       
-                                    "A"         
-                                );
-                            } else if (execute == 3)
-                            {
-                                _impSaltaRepository.UpsertWtd3Direct(
-                                    _company,
-                                    taxEntry, 
-                                    item.CodigoSap,    
-                                    record.U_Cuit,
-                                    desde,
-                                    hasta,
-                                    "80",       // part2
-                                    "A"         // detType
-                                );
-                            } else
-                            { // execute == 4 
-                                //        public void ExecutePrWtd3Logic(Company company, string entryStr, string wtCode, string tipo, string cuit, string risk, double rate, DateTime desde, DateTime hasta)
-                                _logger.Info($"ExecutePrWtd3Logic entryStr:{item.U_Codigo},wtCode:{item.CodigoSap}, tipo:{tipo},cuit:{record.U_Cuit},risk:N,rate:{rate},desde:{desde},hasta:{hasta}");
-                                _impSaltaRepository.ExecutePrWtd3Logic(_company, item.U_Codigo, item.CodigoSap, tipo, record.U_Cuit, "N", rate, desde, hasta);
-                            }
-                            processedCodes += item.CodigoSap + " ";
-                        }
-
-                        await SafeUpdateRecord(record, "20", $"Procesado OK. Códigos: {processedCodes.Trim()}", now);
-                        successCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        errorCount++;
-                        _logger.Error($"Error procesando CUIT {record.U_Cuit}: {ex.Message} {ex.StackTrace}");
-                        await SafeUpdateRecord(record, "40", $"Error: Insertando en WDT3", now);
+                        oWTCode.Lines.Add();
                     }
 
-                    if (progress != null && i % 20 == 0)
+                    oWTCode.Lines.WTCode = codigoSap;       // Columna WTCode
+                    oWTCode.Lines.KeyPart1 = cuit;         // Columna KeyPart1 (CUIT)
+                    oWTCode.Lines.DateFrom = desde;        // Columna DateFrom
+                    oWTCode.Lines.DateTo = hasta;          // Columna DateTo
+                    oWTCode.Lines.KeyPart2 = "80";         // Columna KeyPart2 (Alícuota)
+                    oWTCode.Lines.DetailType = "A";       // Columna DetailType
+
+                    // 4. Actualizar el objeto en SAP
+                    int lRetCode = oWTCode.Update();
+
+                    if (lRetCode != 0)
                     {
-                        int percent = (int)((double)i / recordCount * 100);
-                        progress.Report(percent);
+                        string errMsg = _company.GetLastErrorDescription();
+                        throw new Exception($"Error de SAP al actualizar WithholdingTaxCodes (AbsEntry {taxEntry}): [{lRetCode}] {errMsg}");
                     }
                 }
-            });
-            progress.Report(100);
-            await _contDateRepository.DeactivatePeriodAsync(year, qValue);
-            result.RegistrosConError = errorCount;
-            result.ProcesadosExitosos = result.TotalRegistros - result.RegistrosConError;
-            _logger.Info($"Procesamiento finalizado. Total: {result.TotalRegistros}, Exitosos: {result.ProcesadosExitosos}, Errores: {result.RegistrosConError}");
-            return result;
+                else
+                {
+                    throw new Exception($"No se encontró el código de retención con AbsEntry: {taxEntry}");
+                }
+            }
+            finally
+            {
+                // 5. Liberación explícita del objeto COM
+                if (oWTCode != null)
+                {
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(oWTCode);
+                    oWTCode = null;
+                }
+            }
+        }
+
+
+        private void ExecuteInsertWtd3(int taxEntry, int linea, string codigoSap, string cuit, DateTime desde, DateTime hasta)
+        {
+            _logger.Info($"InsertWtd3Direct taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{codigoSap},record.U_Cuit:{cuit}");
+
+            _impSaltaRepository.InsertWtd3Direct(
+                _company, 
+                taxEntry, 
+                linea, 
+                codigoSap, 
+                cuit, 
+                desde, 
+                hasta, 
+                "80", 
+                "A"
+            );
         }
 
 
@@ -292,17 +308,17 @@ namespace PadronWtd.UI.Services
             return new List<ImpuestoCacheItem>();
         }
 
-        private async Task<(DateTime, DateTime)> GetDynamicDates(string year, string qValue)
+        private async Task<(DateTime, DateTime)> GetDynamicDates(string qPeriodo, string year)
         {
             var periodoService = new PeriodosService();
-            var fechas = await periodoService.GetDatesAsync(year, qValue);
+            var fechas = await periodoService.GetDatesAsync(year, qPeriodo);
 
             if (fechas.Desde.HasValue && fechas.Hasta.HasValue)
             {
                 return (fechas.Desde.Value, fechas.Hasta.Value);
             }
 
-            throw new Exception($"No se encontraron fechas configuradas para {year} {qValue}");
+            throw new Exception($"No se encontraron fechas configuradas para {year} {qPeriodo}");
         }
 
         private bool CuitExistsInSap(string cuit)
