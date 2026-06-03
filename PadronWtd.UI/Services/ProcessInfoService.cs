@@ -133,11 +133,8 @@ namespace PadronWtd.UI.Services
                 foreach (var item in taxItems)
                 {
                     int taxEntry = int.TryParse(item.U_Codigo, out int parsed) ? parsed : 1;
-                    taxEntry = 476;
-                    //// int linea = _impSaltaRepository.GetNextLineId(taxEntry);
-                    //// ExecuteInsertWtd3(taxEntry, linea, item.CodigoSap, record.U_Cuit, desde, hasta);
-                    //ExecuteInsertWtd3ViaDIAPI(taxEntry, item.CodigoSap, record.U_Cuit, desde, hasta);
-                    InspectWithholdingTaxObject(taxEntry);
+
+                    ExecuteInsertWtd3(taxEntry, item.CodigoSap, record.U_Cuit, desde, hasta);
 
 
                 }
@@ -156,106 +153,13 @@ namespace PadronWtd.UI.Services
             }
         }
 
-        private void InspectWithholdingTaxObject(int absEntry)
+        private void ExecuteInsertWtd3(int taxEntry, string codigoSap, string cuit, DateTime desde, DateTime hasta)
         {
-            // CORRECCIÓN: El objeto correcto es WithholdingTaxCodes
-            SAPbobsCOM.WithholdingTaxCodes oWT = null;
-            try
-            {
-                oWT = (SAPbobsCOM.WithholdingTaxCodes)_company.GetBusinessObject(
-                          SAPbobsCOM.BoObjectTypes.oWithholdingTaxCodes);
-
-                if (!oWT.GetByKey(absEntry.ToString())) // GetByKey exige string
-                {
-                    _logger.Warn($"No se encontró la retención con AbsEntry {absEntry} para inspección.");
-                    return;
-                }
-
-                // Listar todas las propiedades vía reflection para auditar el objeto real en tu log
-                var props = oWT.GetType().GetProperties();
-                foreach (var prop in props)
-                {
-                    try
-                    {
-                        var val = prop.GetValue(oWT);
-                        _logger.Info($"Propiedad: {prop.Name} | Tipo: {prop.PropertyType.Name} | Valor: {val}");
-                    }
-                    catch { /* ignorar propiedades no accesibles en este estado */ }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Error en inspección por Reflection: {ex.Message}");
-            }
-            finally
-            {
-                if (oWT != null)
-                {
-                    System.Runtime.InteropServices.Marshal.ReleaseComObject(oWT);
-                    oWT = null;
-                }
-            }
-        }
-
-        private void ExecuteInsertWtd3ViaDIAPI(int taxEntry, string codigoSap, string cuit, DateTime desde, DateTime hasta)
-        {
-            _logger.Info($"InsertWtd3ViaDIAPI - taxEntry (AbsEntry): {taxEntry}, WTCode: {codigoSap}, CUIT: {cuit}");
-
-            // 1. Obtener el objeto de Retenciones
-            SAPbobsCOM.WithholdingTaxCodes oWTCode = (SAPbobsCOM.WithholdingTaxCodes)_company.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oWithholdingTaxCodes);
-
-            try
-            {
-                if (oWTCode.GetByKey(taxEntry.ToString()))
-                {
-                    // 2. Controlar la creación de una nueva línea
-                    // Usamos la propiedad Count disponible en tu interfaz descompilada
-                    if (oWTCode.Lines.Count > 0)
-                    {
-                        oWTCode.Lines.Add();
-                    }
-
-                    // 3. Pasamos los parámetros obligatorios a través de UserFields (Mapeo real de WTD3 en SAP 10)
-                    oWTCode.Lines.UserFields.Fields.Item("WTCode").Value = codigoSap;
-                    oWTCode.Lines.UserFields.Fields.Item("KeyPart1").Value = cuit;
-                    oWTCode.Lines.UserFields.Fields.Item("DateFrom").Value = desde;
-                    oWTCode.Lines.UserFields.Fields.Item("DateTo").Value = hasta;
-                    oWTCode.Lines.UserFields.Fields.Item("KeyPart2").Value = "80";
-                    oWTCode.Lines.UserFields.Fields.Item("DetailType").Value = "A";
-
-                    // 4. Actualizar el objeto maestro en la BD de SAP
-                    int lRetCode = oWTCode.Update();
-
-                    if (lRetCode != 0)
-                    {
-                        string errMsg = _company.GetLastErrorDescription();
-                        throw new Exception($"Error de SAP al actualizar WithholdingTaxCodes (AbsEntry {taxEntry}): [{lRetCode}] {errMsg}");
-                    }
-                }
-                else
-                {
-                    throw new Exception($"No se encontró el código de retención con AbsEntry: {taxEntry}");
-                }
-            }
-            finally
-            {
-                // 5. Liberación explícita del objeto COM
-                if (oWTCode != null)
-                {
-                    System.Runtime.InteropServices.Marshal.ReleaseComObject(oWTCode);
-                    oWTCode = null;
-                }
-            }
-        }
-
-        private void ExecuteInsertWtd3(int taxEntry, int linea, string codigoSap, string cuit, DateTime desde, DateTime hasta)
-        {
-            _logger.Info($"InsertWtd3Direct taxEntry:{taxEntry},linea:{linea},item.CodigoSap:{codigoSap},record.U_Cuit:{cuit}");
+            _logger.Info($"InsertWtd3Direct taxEntry:{taxEntry},item.CodigoSap:{codigoSap},record.U_Cuit:{cuit}");
 
             _impSaltaRepository.InsertWtd3Direct(
                 _company, 
                 taxEntry, 
-                linea, 
                 codigoSap, 
                 cuit, 
                 desde, 
