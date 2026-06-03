@@ -3,13 +3,16 @@ using PadronWtd.Repository.DI;
 using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 using SAPbobsCOM;
+using SAPbouiCOM;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 // Asegúrate de tener este using para las listas
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using static System.Runtime.CompilerServices.RuntimeHelpers;
-using System.Configuration;
+
 
 namespace PadronWtd.UI.Services
 {
@@ -19,7 +22,8 @@ namespace PadronWtd.UI.Services
         private readonly PSaltaRepository _impSaltaRepository;
         private readonly SaltaConfigRepository _configRepository;
         private readonly ContDateRepository _contDateRepository;
-        private readonly Company _company;
+        private readonly SAPbobsCOM.Company _company;
+        
 
         private Dictionary<string, List<ImpuestoCacheItem>> _impuestosCache;
 
@@ -129,9 +133,12 @@ namespace PadronWtd.UI.Services
                 foreach (var item in taxItems)
                 {
                     int taxEntry = int.TryParse(item.U_Codigo, out int parsed) ? parsed : 1;
-                    // int linea = _impSaltaRepository.GetNextLineId(taxEntry);
-                    // ExecuteInsertWtd3(taxEntry, linea, item.CodigoSap, record.U_Cuit, desde, hasta);
-                    ExecuteInsertWtd3ViaDIAPI(taxEntry, item.CodigoSap, record.U_Cuit, desde, hasta);
+                    taxEntry = 476;
+                    //// int linea = _impSaltaRepository.GetNextLineId(taxEntry);
+                    //// ExecuteInsertWtd3(taxEntry, linea, item.CodigoSap, record.U_Cuit, desde, hasta);
+                    //ExecuteInsertWtd3ViaDIAPI(taxEntry, item.CodigoSap, record.U_Cuit, desde, hasta);
+                    InspectWithholdingTaxObject(taxEntry);
+
 
                 }
 
@@ -149,6 +156,47 @@ namespace PadronWtd.UI.Services
             }
         }
 
+        private void InspectWithholdingTaxObject(int absEntry)
+        {
+            // CORRECCIÓN: El objeto correcto es WithholdingTaxCodes
+            SAPbobsCOM.WithholdingTaxCodes oWT = null;
+            try
+            {
+                oWT = (SAPbobsCOM.WithholdingTaxCodes)_company.GetBusinessObject(
+                          SAPbobsCOM.BoObjectTypes.oWithholdingTaxCodes);
+
+                if (!oWT.GetByKey(absEntry.ToString())) // GetByKey exige string
+                {
+                    _logger.Warn($"No se encontró la retención con AbsEntry {absEntry} para inspección.");
+                    return;
+                }
+
+                // Listar todas las propiedades vía reflection para auditar el objeto real en tu log
+                var props = oWT.GetType().GetProperties();
+                foreach (var prop in props)
+                {
+                    try
+                    {
+                        var val = prop.GetValue(oWT);
+                        _logger.Info($"Propiedad: {prop.Name} | Tipo: {prop.PropertyType.Name} | Valor: {val}");
+                    }
+                    catch { /* ignorar propiedades no accesibles en este estado */ }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error en inspección por Reflection: {ex.Message}");
+            }
+            finally
+            {
+                if (oWT != null)
+                {
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(oWT);
+                    oWT = null;
+                }
+            }
+        }
+
         private void ExecuteInsertWtd3ViaDIAPI(int taxEntry, string codigoSap, string cuit, DateTime desde, DateTime hasta)
         {
             _logger.Info($"InsertWtd3ViaDIAPI - taxEntry (AbsEntry): {taxEntry}, WTCode: {codigoSap}, CUIT: {cuit}");
@@ -158,23 +206,24 @@ namespace PadronWtd.UI.Services
 
             try
             {
-                // CORRECCIÓN 1: Convertir el int a string para el GetByKey
                 if (oWTCode.GetByKey(taxEntry.ToString()))
                 {
-                    // CORRECCIÓN 2: Uso de propiedades correctas de la DI API (OfficialCode en lugar de WTCode)
-                    if (oWTCode.Lines.Count > 0 && !string.IsNullOrEmpty(oWTCode.Lines.OfficialCode))
+                    // 2. Controlar la creación de una nueva línea
+                    // Usamos la propiedad Count disponible en tu interfaz descompilada
+                    if (oWTCode.Lines.Count > 0)
                     {
                         oWTCode.Lines.Add();
                     }
 
-                    oWTCode.Lines.WTCode = codigoSap;       // Columna WTCode
-                    oWTCode.Lines.KeyPart1 = cuit;         // Columna KeyPart1 (CUIT)
-                    oWTCode.Lines.DateFrom = desde;        // Columna DateFrom
-                    oWTCode.Lines.DateTo = hasta;          // Columna DateTo
-                    oWTCode.Lines.KeyPart2 = "80";         // Columna KeyPart2 (Alícuota)
-                    oWTCode.Lines.DetailType = "A";       // Columna DetailType
+                    // 3. Pasamos los parámetros obligatorios a través de UserFields (Mapeo real de WTD3 en SAP 10)
+                    oWTCode.Lines.UserFields.Fields.Item("WTCode").Value = codigoSap;
+                    oWTCode.Lines.UserFields.Fields.Item("KeyPart1").Value = cuit;
+                    oWTCode.Lines.UserFields.Fields.Item("DateFrom").Value = desde;
+                    oWTCode.Lines.UserFields.Fields.Item("DateTo").Value = hasta;
+                    oWTCode.Lines.UserFields.Fields.Item("KeyPart2").Value = "80";
+                    oWTCode.Lines.UserFields.Fields.Item("DetailType").Value = "A";
 
-                    // 4. Actualizar el objeto en SAP
+                    // 4. Actualizar el objeto maestro en la BD de SAP
                     int lRetCode = oWTCode.Update();
 
                     if (lRetCode != 0)
@@ -198,7 +247,6 @@ namespace PadronWtd.UI.Services
                 }
             }
         }
-
 
         private void ExecuteInsertWtd3(int taxEntry, int linea, string codigoSap, string cuit, DateTime desde, DateTime hasta)
         {
