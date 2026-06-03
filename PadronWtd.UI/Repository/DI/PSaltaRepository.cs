@@ -200,6 +200,106 @@ namespace PadronWtd.Repository.DI
             });
         }
 
+        public async Task BulkInsertAsync(List<PSaltaRecord> records, IProgress<int> progress = null)
+        {
+            if (records == null || !records.Any()) return;
+
+            await Task.Run(() =>
+            {
+                Recordset oRS = null;
+                try
+                {
+                    oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                    int batchSize = 500;
+                    int totalRecords = records.Count;
+                    int processed = 0;
+
+                    // 1. Obtenemos el punto de partida real de la base de datos (una sola vez)
+                    long currentIdCounter = GetMaxCode() + 1;
+
+                    string periodName = records.First().Name ?? "T01";
+
+                    while (processed < totalRecords)
+                    {
+                        var batch = records.Skip(processed).Take(batchSize).ToList();
+                        if (batch.Any())
+                        {
+                            // 2. Pasamos el contador actual al constructor del SQL
+                            string sql = BuildHanaInsertBatch(batch, periodName, currentIdCounter);
+                            oRS.DoQuery(sql);
+
+                            // 3. Incrementamos el contador por la cantidad de registros insertados
+                            currentIdCounter += batch.Count;
+                        }
+
+                        processed += batch.Count;
+                        if (progress != null) progress.Report((processed * 100) / totalRecords);
+                        _logger.Info($"Insertados: {processed} / {totalRecords}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error en BulkInsert: {ex.Message}");
+                    throw;
+                }
+                finally { if (oRS != null) Marshal.ReleaseComObject(oRS); }
+            });
+        }
+        private long GetMaxCode()
+        {
+            Recordset rs = null;
+            try
+            {
+                rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                // Buscamos el Code más alto convertido a número para no chocar
+                string sql = $"SELECT MAX(CAST(\"Code\" AS BIGINT)) FROM \"{DB_TABLE_NAME}\"";
+                rs.DoQuery(sql);
+                if (!rs.EoF && rs.Fields.Item(0).Value != null)
+                {
+                    return Convert.ToInt64(rs.Fields.Item(0).Value.ToString());
+                }
+                return 0;
+            }
+            catch { return 0; }
+        }
+
+        private string BuildHanaInsertBatch(List<PSaltaRecord> batch, string periodName, long startCode)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append($"INSERT INTO \"{DB_TABLE_NAME}\" ");
+            sb.Append("(\"Code\", \"Name\", \"U_Anio\", \"U_Padron\", \"U_Cuit\", \"U_Inscripcion\", \"U_Riesgo\", \"U_Estado\", \"U_Notas\") ");
+
+            for (int i = 0; i < batch.Count; i++)
+            {
+                var r = batch[i];
+
+                // GENERACIÓN SECUENCIAL PURA: startCode + i
+                string uniqueCode = (startCode + i).ToString();
+                string rowName = SafeSubstring(periodName, 50);
+
+                if (i > 0) sb.Append(" UNION ALL ");
+                sb.Append(" SELECT ");
+
+                if (i == 0)
+                    sb.Append($"CAST('{uniqueCode}' AS NVARCHAR(50)), CAST('{rowName}' AS NVARCHAR(100)), ");
+                else
+                    sb.Append($"'{uniqueCode}', '{rowName}', ");
+
+                // --- LÍMITES BASADOS EN TU IMAGEN DE SAP ---
+                sb.Append($"'{SafeSubstring(r.U_Anio, 4)}', ");
+                sb.Append($"'{SafeSubstring(r.U_Padron, 250)}', ");
+                sb.Append($"'{SafeSubstring(r.U_Cuit, 11)}', ");
+                sb.Append($"'{SafeSubstring(r.U_Inscripcion, 2)}', ");
+                sb.Append($"'{SafeSubstring(r.U_Riesgo, 2)}', ");
+                sb.Append("'10', "); // Estado: "10" para que quepa en Alfanumérico(2)
+                sb.Append($"'{SafeSubstring(r.U_Notas, 50)}' ");
+
+                sb.Append(" FROM DUMMY ");
+            }
+            return sb.ToString();
+        }
+
+
 
         // -----------------------------------------------------------------------
         // OTROS MÉTODOS PÚBLICOS
@@ -284,7 +384,7 @@ namespace PadronWtd.Repository.DI
             });
         }
 
-        public void InsertWtd3Direct(
+        public (bool success, string error) InsertWtd3Direct(
             Company company,
             int entry,
             string wddCode,
@@ -298,7 +398,6 @@ namespace PadronWtd.Repository.DI
             try
             {
                 oRS = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
-
                 string fDesde = desde.ToString("yyyyMMdd");
                 string fHasta = hasta.ToString("yyyyMMdd");
 
@@ -306,18 +405,19 @@ namespace PadronWtd.Repository.DI
                 string queryCheck = $@"
             SELECT COUNT(*) AS CANT 
             FROM ""WTD3""
-            WHERE ""AbsEntry""  = {entry}
-              AND ""WTCode""    = '{wddCode}'
-              AND ""KeyPart1""  = '{cuit}'
-              AND ""DateFrom""  = TO_DATE('{fDesde}', 'YYYYMMDD')";
+            WHERE ""AbsEntry"" = {entry}
+              AND ""WTCode""   = '{wddCode}'
+              AND ""KeyPart1"" = '{cuit}'
+              AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')";
 
                 oRS.DoQuery(queryCheck);
                 int existe = int.Parse(oRS.Fields.Item("CANT").Value.ToString());
 
                 if (existe > 0)
                 {
-                    _logger.Info($"WTD3 ya existe para CUIT:{cuit} WTCode:{wddCode} Desde:{fDesde} - Skipping");
-                    return;
+                    string msgSkip = $"WTD3 ya existe para CUIT:{cuit} WTCode:{wddCode} Desde:{fDesde} - Skipping";
+                    _logger.Info(msgSkip);
+                    return (true, string.Empty);
                 }
 
                 // Paso 2: obtener próximo LineId
@@ -329,7 +429,7 @@ namespace PadronWtd.Repository.DI
                 oRS.DoQuery(queryMaxLine);
                 string nextLine = oRS.Fields.Item("NEXT_LINE").Value.ToString();
 
-                // Paso 3: Insert seguro
+                // Paso 3: Insert
                 string queryInsert = $@"
             INSERT INTO ""WTD3"" 
             (
@@ -361,11 +461,14 @@ namespace PadronWtd.Repository.DI
                 _logger.Info(queryInsert);
                 oRS.DoQuery(queryInsert);
                 _logger.Info($"WTD3 insertado OK - CUIT:{cuit}, LineId:{nextLine}");
+
+                return (true, string.Empty);
             }
             catch (Exception ex)
             {
-                _logger.Error($"Error InsertWtd3Direct: {ex.Message}\n{ex.StackTrace}");
-                throw new Exception($"Error al insertar en WTD3: {ex.Message}");
+                string error = $"Error al insertar en WTD3 [CUIT:{cuit} WTCode:{wddCode} Entry:{entry}]: {ex.Message}";
+                _logger.Error($"{error}\n{ex.StackTrace}");
+                return (false, error);
             }
             finally
             {
