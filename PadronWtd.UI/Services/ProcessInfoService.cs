@@ -205,14 +205,6 @@ namespace PadronWtd.UI.Services
             }
         }
 
-        private string MapRiskToFlag(string padronRisk)
-        {
-            if (string.IsNullOrEmpty(padronRisk)) return "N";
-            string risk = padronRisk.Trim().ToUpper();
-            if (risk == "RA" || risk == "RB" || risk == "JU") return "Y";
-            return "N";
-        }
-
         // --------------------------------------------------------------------------------------------
         // Helpers de Lógica de Negocio (Cache y DB)
         // --------------------------------------------------------------------------------------------
