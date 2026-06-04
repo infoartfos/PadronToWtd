@@ -1,16 +1,16 @@
-﻿using PadronWtd.Domain;
-using PadronWtd.Repository.DI;
-using PadronWtd.UI.DI;
-using PadronWtd.UI.Logging;
-using SAPbobsCOM;
-using SAPbouiCOM;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Configuration;
 // Asegúrate de tener este using para las listas
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using PadronWtd.Domain;
+using PadronWtd.Repository.DI;
+using PadronWtd.UI.DI;
+using PadronWtd.UI.Logging;
+using SAPbobsCOM;
+using SAPbouiCOM;
 using static System.Runtime.CompilerServices.RuntimeHelpers;
 
 
@@ -131,7 +131,6 @@ namespace PadronWtd.UI.Services
 
                 // Procesar inserciones
                 foreach (var item in taxItems)
-                
                 {
                     int taxEntry = int.TryParse(item.U_Codigo, out int parsed) ? parsed : 1;
 
@@ -151,7 +150,7 @@ namespace PadronWtd.UI.Services
                     );
 
                     if (!success)
-                        throw new Exception(error);
+                        throw new Exception($"Error código {codigoSap}: {error}");
 
 
                 }
@@ -202,9 +201,9 @@ namespace PadronWtd.UI.Services
                 {
                     notas = notas.Replace("'", "");
 
-                    if (notas.Length > 99)
+                    if (notas.Length > 50)
                     {
-                        notas = notas.Substring(0, 99);
+                        notas = notas.Substring(0, 50);
                     }
                 }
                 else
