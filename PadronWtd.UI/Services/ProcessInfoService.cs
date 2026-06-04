@@ -171,14 +171,14 @@ namespace PadronWtd.UI.Services
                         insertedCodes.Add(codigoSap);
                     }
 
-                    _company.CommitTransaction();
+                    _company.EndTransaction(SAPbobsCOM.BoWfTransOpt.wf_Commit);
                     transactionStarted = false;
                 }
-                catch (Exception ex)
+                catch
                 {
                     if (transactionStarted && _company.InTransaction)
                     {
-                        try { _company.RollbackTransaction(); }
+                        try { _company.EndTransaction(SAPbobsCOM.BoWfTransOpt.wf_RollBack); }
                         catch (Exception rbEx) { _logger.Error($"Error en rollback: {rbEx.Message}"); }
                         transactionStarted = false;
                     }
