@@ -131,6 +131,8 @@ namespace PadronWtd.UI.Services
 
                 // Procesar inserciones con transacción DI API
                 bool transactionStarted = false;
+                List<string> existingCodes = new List<string>();
+                List<string> insertedCodes = new List<string>();
                 try
                 {
                     _company.StartTransaction();
@@ -139,9 +141,17 @@ namespace PadronWtd.UI.Services
                     foreach (var item in taxItems)
                     {
                         int taxEntry = int.TryParse(item.U_Codigo, out int parsed) ? parsed : 1;
-
                         string codigoSap = item.CodigoSap;
                         string cuit = record.U_Cuit;
+
+                        // Verificar si ya existe en WTD3
+                        if (_impSaltaRepository.CheckWtd3Exists(taxEntry, codigoSap, cuit, desde))
+                        {
+                            _logger.Warn($"WTD3 ya existe para CUIT:{cuit} WTCode:{codigoSap} - Omitiendo");
+                            existingCodes.Add(codigoSap);
+                            continue;
+                        }
+
                         _logger.Info($"InsertWtd3 taxEntry:{taxEntry}, codigoSap:{codigoSap}, cuit:{cuit}");
 
                         var (success, error) = _impSaltaRepository.InsertWtd3Direct(
@@ -156,7 +166,9 @@ namespace PadronWtd.UI.Services
                         );
 
                         if (!success)
-                            throw new Exception($"Error código {codigoSap}: {error}");
+                            throw new Exception($"{codigoSap}: {error}");
+
+                        insertedCodes.Add(codigoSap);
                     }
 
                     _company.CommitTransaction();
@@ -173,8 +185,16 @@ namespace PadronWtd.UI.Services
                     throw;
                 }
 
-                string processedCodes = string.Join(" ", taxItems.Select(x => x.CodigoSap));
+                if (existingCodes.Any())
+                {
+                    string note = $"Códigos ya registrados: {string.Join(" ", existingCodes)}";
+                    if (note.Length > 50) note = note.Substring(0, 50);
+                    await SafeUpdateRecord(record, "40", note, timestamp);
+                    _logger.Warn($"Registro CUIT {record.U_Cuit} parcial: insertados [{string.Join(" ", insertedCodes)}], existentes [{string.Join(" ", existingCodes)}]");
+                    return false;
+                }
 
+                string processedCodes = string.Join(" ", insertedCodes);
                 await SafeUpdateRecord(record, "20", $"Procesado OK. Códigos: {processedCodes}", timestamp);
                 return true;
             }
@@ -201,7 +221,6 @@ namespace PadronWtd.UI.Services
                 "A"
             );
         }
-
 
         // --------------------------------------------------------------------------------------------
         // Helpers para evitar Crash en Updates

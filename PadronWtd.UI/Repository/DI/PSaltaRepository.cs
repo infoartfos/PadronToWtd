@@ -471,6 +471,35 @@ namespace PadronWtd.Repository.DI
             }
         }
 
+        public bool CheckWtd3Exists(int entry, string wddCode, string cuit, DateTime desde)
+        {
+            Recordset oRS = null;
+            try
+            {
+                oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                string fDesde = desde.ToString("yyyyMMdd");
+                string query = $@"
+                SELECT COUNT(*) AS CANT 
+                FROM ""WTD3""
+                WHERE ""AbsEntry"" = {entry}
+                  AND ""WTCode""   = '{wddCode}'
+                  AND ""KeyPart1"" = '{cuit}'
+                  AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')";
+                oRS.DoQuery(query);
+                int cant = int.Parse(oRS.Fields.Item("CANT").Value.ToString());
+                return cant > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error en CheckWtd3Exists: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                if (oRS != null) Marshal.ReleaseComObject(oRS);
+            }
+        }
+
         public async Task<Dictionary<string, int>> GetStatsByAnioAsync(string qValue, string year)
         {
             return await Task.Run(() =>
