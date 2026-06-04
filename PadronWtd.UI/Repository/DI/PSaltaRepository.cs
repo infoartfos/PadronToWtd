@@ -420,16 +420,7 @@ namespace PadronWtd.Repository.DI
                     return (true, string.Empty);
                 }
 
-                // Paso 2: obtener próximo LineId
-                string queryMaxLine = $@"
-            SELECT IFNULL(MAX(""LineId""), -1) + 1 AS NEXT_LINE
-            FROM ""WTD3""
-            WHERE ""AbsEntry"" = {entry}";
-
-                oRS.DoQuery(queryMaxLine);
-                string nextLine = oRS.Fields.Item("NEXT_LINE").Value.ToString();
-
-                // Paso 3: Insert
+                // Paso 2 : INSERT con LineId como subquery (atómico)
                 string queryInsert = $@"
             INSERT INTO ""WTD3"" 
             (
@@ -447,7 +438,7 @@ namespace PadronWtd.Repository.DI
             VALUES 
             (
                 {entry}, 
-                {nextLine},
+                (SELECT COALESCE(MAX(""LineId""), -1) + 1 FROM ""WTD3"" WHERE ""AbsEntry"" = {entry}),
                 '{wddCode}', 
                 '{cuit}',
                 '{part2}',
@@ -460,7 +451,7 @@ namespace PadronWtd.Repository.DI
 
                 _logger.Info(queryInsert);
                 oRS.DoQuery(queryInsert);
-                _logger.Info($"WTD3 insertado OK - CUIT:{cuit}, LineId:{nextLine}");
+                _logger.Info($"WTD3 insertado OK - CUIT:{cuit}, {wddCode} , Desd:{fDesde}");
 
                 return (true, string.Empty);
             }

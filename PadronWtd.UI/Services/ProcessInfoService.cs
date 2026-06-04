@@ -129,33 +129,50 @@ namespace PadronWtd.UI.Services
                     return false;
                 }
 
-                // Procesar inserciones
-                foreach (var item in taxItems)
+                // Procesar inserciones con transacción DI API
+                bool transactionStarted = false;
+                try
                 {
-                    int taxEntry = int.TryParse(item.U_Codigo, out int parsed) ? parsed : 1;
+                    _company.StartTransaction();
+                    transactionStarted = true;
 
-                    string codigoSap = item.CodigoSap;
-                    string cuit = record.U_Cuit;
-                    _logger.Info($"InsertWtd3 taxEntry:{taxEntry}, codigoSap:{codigoSap}, cuit:{cuit}");
+                    foreach (var item in taxItems)
+                    {
+                        int taxEntry = int.TryParse(item.U_Codigo, out int parsed) ? parsed : 1;
 
-                    var (success, error) = _impSaltaRepository.InsertWtd3Direct(
-                        _company,
-                        taxEntry,
-                        codigoSap,
-                        cuit,
-                        desde,
-                        hasta,
-                        "80",
-                        "A"
-                    );
+                        string codigoSap = item.CodigoSap;
+                        string cuit = record.U_Cuit;
+                        _logger.Info($"InsertWtd3 taxEntry:{taxEntry}, codigoSap:{codigoSap}, cuit:{cuit}");
 
-                    if (!success)
-                        throw new Exception($"Error código {codigoSap}: {error}");
+                        var (success, error) = _impSaltaRepository.InsertWtd3Direct(
+                            _company,
+                            taxEntry,
+                            codigoSap,
+                            cuit,
+                            desde,
+                            hasta,
+                            "80",
+                            "A"
+                        );
 
+                        if (!success)
+                            throw new Exception($"Error código {codigoSap}: {error}");
+                    }
 
+                    _company.CommitTransaction();
+                    transactionStarted = false;
+                }
+                catch (Exception ex)
+                {
+                    if (transactionStarted && _company.InTransaction)
+                    {
+                        try { _company.RollbackTransaction(); }
+                        catch (Exception rbEx) { _logger.Error($"Error en rollback: {rbEx.Message}"); }
+                        transactionStarted = false;
+                    }
+                    throw;
                 }
 
-                // Obtener códigos en una sola línea limpia para el log final
                 string processedCodes = string.Join(" ", taxItems.Select(x => x.CodigoSap));
 
                 await SafeUpdateRecord(record, "20", $"Procesado OK. Códigos: {processedCodes}", timestamp);
