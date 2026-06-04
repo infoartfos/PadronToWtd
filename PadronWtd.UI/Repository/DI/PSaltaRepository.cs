@@ -406,12 +406,12 @@ namespace PadronWtd.Repository.DI
 
                 // Paso 1: verificar si ya existe ese CUIT en ese período
                 string queryCheck = $@"
-            SELECT COUNT(*) AS CANT 
-            FROM ""WTD3""
-            WHERE ""AbsEntry"" = {entry}
-              AND ""WTCode""   = '{wddCode}'
-              AND ""KeyPart1"" = '{cuit}'
-              AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')";
+                        SELECT COUNT(*) AS CANT 
+                        FROM ""WTD3""
+                        WHERE ""AbsEntry"" = {entry}
+                          AND ""WTCode""   = '{wddCode}'
+                          AND ""KeyPart1"" = '{cuit}'
+                          AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')";
 
                 oRS.DoQuery(queryCheck);
                 int existe = int.Parse(oRS.Fields.Item("CANT").Value.ToString());
@@ -425,32 +425,32 @@ namespace PadronWtd.Repository.DI
 
                 // Paso 2 : INSERT con LineId como subquery (atómico)
                 string queryInsert = $@"
-            INSERT INTO ""WTD3"" 
-            (
-                ""AbsEntry"", 
-                ""LineId"",
-                ""WTCode"", 
-                ""KeyPart1"",
-                ""KeyPart2"",
-                ""DateFrom"", 
-                ""DateTo"",
-                ""DetailType"",
-                ""DataSource"",
-                ""UpdateDate""
-            )
-            VALUES 
-            (
-                {entry}, 
-                (SELECT COALESCE(MAX(""LineId""), -1) + 1 FROM ""WTD3"" WHERE ""AbsEntry"" = {entry}),
-                '{wddCode}', 
-                '{cuit}',
-                '{part2}',
-                TO_DATE('{fDesde}', 'YYYYMMDD'), 
-                TO_DATE('{fHasta}', 'YYYYMMDD'),
-                '{detType}',
-                'M',
-                NOW()
-            )";
+                        INSERT INTO ""WTD3"" 
+                        (
+                            ""AbsEntry"", 
+                            ""LineId"",
+                            ""WTCode"", 
+                            ""KeyPart1"",
+                            ""KeyPart2"",
+                            ""DateFrom"", 
+                            ""DateTo"",
+                            ""DetailType"",
+                            ""DataSource"",
+                            ""UpdateDate""
+                        )
+                        VALUES 
+                        (
+                            {entry}, 
+                            (SELECT COALESCE(MAX(""LineId""), -1) + 1 FROM ""WTD3"" WHERE ""AbsEntry"" = {entry}),
+                            '{wddCode}', 
+                            '{cuit}',
+                            '{part2}',
+                            TO_DATE('{fDesde}', 'YYYYMMDD'), 
+                            TO_DATE('{fHasta}', 'YYYYMMDD'),
+                            '{detType}',
+                            'M',
+                            NOW()
+                        )";
 
                 string queryLimpia = Regex.Replace(queryInsert, @"\s+", " ").Trim();
                 _logger.Info(queryLimpia);
@@ -483,12 +483,12 @@ namespace PadronWtd.Repository.DI
                 oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
                 string fDesde = desde.ToString("yyyyMMdd");
                 string query = $@"
-                SELECT COUNT(*) AS CANT 
-                FROM ""WTD3""
-                WHERE ""AbsEntry"" = {entry}
-                  AND ""WTCode""   = '{wddCode}'
-                  AND ""KeyPart1"" = '{cuit}'
-                  AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')";
+                        SELECT COUNT(*) AS CANT 
+                        FROM ""WTD3""
+                        WHERE ""AbsEntry"" = {entry}
+                          AND ""WTCode""   = '{wddCode}'
+                          AND ""KeyPart1"" = '{cuit}'
+                          AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')";
                 oRS.DoQuery(query);
                 int cant = int.Parse(oRS.Fields.Item("CANT").Value.ToString());
                 return cant > 0;

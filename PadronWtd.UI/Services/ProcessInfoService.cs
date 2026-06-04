@@ -187,7 +187,7 @@ namespace PadronWtd.UI.Services
 
                 if (existingCodes.Any())
                 {
-                    string note = $"Códigos ya registrados: {string.Join(" ", existingCodes)}";
+                    string note = $"Códigos ya estaban registrados: {string.Join(" ", existingCodes)}";
                     if (insertedCodes.Any())
                     {
                         note += $" insertados[{ string.Join(" ", insertedCodes)}]";
