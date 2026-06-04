@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace PadronWtd.Repository.DI
 {
-    public class PSaltaRepository
+    public class PSaltaRepository : IPSaltaWtd3Repository
     {
         public const int MaxLenNotas = 253;
         //

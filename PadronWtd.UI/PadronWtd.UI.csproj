@@ -123,8 +123,13 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Repository\DI\ContDateRepository.cs" />
+    <Compile Include="Repository\DI\DITransactionManager.cs" />
+    <Compile Include="Repository\DI\IPSaltaWtd3Repository.cs" />
+    <Compile Include="Repository\DI\IProviderChecker.cs" />
+    <Compile Include="Repository\DI\ITransactionManager.cs" />
     <Compile Include="Repository\DI\PSaltaRepository.cs" />
     <Compile Include="Repository\DI\SaltaConfigRepository.cs" />
+    <Compile Include="Repository\DI\SapProviderChecker.cs" />
     <Compile Include="Repository\DI\SapConnectionManager.cs" />
     <Compile Include="Repository\SL\PSaltaRepository.cs" />
     <Compile Include="Services\FileImportService.cs" />

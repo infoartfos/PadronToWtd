@@ -18,6 +18,8 @@ using System.Runtime.InteropServices;
 // para los componentes COM.  Si es necesario obtener acceso a un tipo en este ensamblado desde 
 // COM, establezca el atributo ComVisible en true en este tipo.
 [assembly: ComVisible(false)]
+[assembly: InternalsVisibleTo("PadronWtd.Tests.Integration")]
+[assembly: InternalsVisibleTo("PadronWtd.Tests.UI")]
 
 // El siguiente GUID sirve como id. de typelib si este proyecto se expone a COM.
 [assembly: Guid("9fc0f2ef-32a9-4b5a-abb9-64298c990eb3")]
