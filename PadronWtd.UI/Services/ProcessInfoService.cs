@@ -166,7 +166,7 @@ namespace PadronWtd.UI.Services
                         );
 
                         if (!success)
-                            throw new Exception($"{codigoSap}: {error}");
+                            throw new Exception($"{error}");
 
                         insertedCodes.Add(codigoSap);
                     }
@@ -174,7 +174,7 @@ namespace PadronWtd.UI.Services
                     _company.EndTransaction(SAPbobsCOM.BoWfTransOpt.wf_Commit);
                     transactionStarted = false;
                 }
-                catch
+                catch (Exception ex)
                 {
                     if (transactionStarted && _company.InTransaction)
                     {
@@ -182,13 +182,17 @@ namespace PadronWtd.UI.Services
                         catch (Exception rbEx) { _logger.Error($"Error en rollback: {rbEx.Message}"); }
                         transactionStarted = false;
                     }
-                    throw;
+                    throw(ex);
                 }
 
                 if (existingCodes.Any())
                 {
                     string note = $"Códigos ya registrados: {string.Join(" ", existingCodes)}";
-                    if (note.Length > 50) note = note.Substring(0, 50);
+                    if (insertedCodes.Any())
+                    {
+                        note += $" insertados[{ string.Join(" ", insertedCodes)}]";
+                    }
+
                     await SafeUpdateRecord(record, "40", note, timestamp);
                     _logger.Warn($"Registro CUIT {record.U_Cuit} parcial: insertados [{string.Join(" ", insertedCodes)}], existentes [{string.Join(" ", existingCodes)}]");
                     return false;
@@ -236,11 +240,16 @@ namespace PadronWtd.UI.Services
                 if (notas != null)
                 {
                     notas = notas.Replace("'", "");
+                    SAPbobsCOM.UserTables oUserTables = _company.UserTables;
+                    SAPbobsCOM.UserTable oTable = oUserTables.Item("PADRON_SALTA_IMP3");
 
-                    if (notas.Length > 50)
+                    int maxStringLength = oTable.UserFields.Fields.Item("U_Notas").Size;
+                    if (notas.Length > maxStringLength)
                     {
-                        notas = notas.Substring(0, 50);
+                        _logger.Warn($"El mensaje de notas superaba los {maxStringLength} caracteres. Se recortó dinámicamente.");
+                        notas = notas.Substring(0, maxStringLength);
                     }
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(oTable);
                 }
                 else
                 {
@@ -248,12 +257,11 @@ namespace PadronWtd.UI.Services
                 }
 
                 record.U_Notas = notas;
-
                 await _impSaltaRepository.UpdateAsync(record);
             }
             catch (Exception ex)
             {
-                _logger.Error($"Fallo CRÍTICO al actualizar estado en SAP para Code {record.Code}. Error original fue ignorado. Causa: {ex.Message}");
+                _logger.Error($"Fallo CRÍTICO al actualizar estado en SAP para Code {record.Code}. Causa: {ex.Message}");
             }
         }
 

@@ -7,12 +7,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace PadronWtd.Repository.DI
 {
     public class PSaltaRepository
     {
+        public const int MaxLenNotas = 253;
+        //
         private readonly ILogger _logger;
         private readonly Company _company;
         private const string TABLE_NAME = "PADRON_SALTA_IMP3";
@@ -76,6 +79,7 @@ namespace PadronWtd.Repository.DI
                             U_Cuit = GetValue(recordset, "U_Cuit"),
                             U_Inscripcion = GetValue(recordset, "U_Inscripcion"),
                             U_Riesgo = GetValue(recordset, "U_Riesgo"),
+
                             U_Notas = GetValue(recordset, "U_Notas"),
                             U_Procesado = GetValue(recordset, "U_Procesado"),
                             U_Estado = GetValue(recordset, "U_Estado")
@@ -106,7 +110,6 @@ namespace PadronWtd.Repository.DI
                     if (userTable.GetByKey(r.Code))
                     {
                         userTable.Name = r.Name;
-
                         // Actualizar campos UDF
                         userTable.UserFields.Fields.Item("U_Anio").Value = r.U_Anio ?? "";
                         userTable.UserFields.Fields.Item("U_Padron").Value = r.U_Padron ?? "";
@@ -134,7 +137,7 @@ namespace PadronWtd.Repository.DI
                 catch (Exception ex)
                 {
                     _logger.Error($"Error en UpdateAsync: {ex.Message} {ex.StackTrace}");
-                    throw;
+                    throw(ex);
                 }
                 finally
                 {
@@ -292,7 +295,7 @@ namespace PadronWtd.Repository.DI
                 sb.Append($"'{SafeSubstring(r.U_Inscripcion, 2)}', ");
                 sb.Append($"'{SafeSubstring(r.U_Riesgo, 2)}', ");
                 sb.Append("'10', "); // Estado: "10" para que quepa en Alfanumérico(2)
-                sb.Append($"'{SafeSubstring(r.U_Notas, 50)}' ");
+                sb.Append($"'{SafeSubstring(r.U_Notas, MaxLenNotas)}' ");
 
                 sb.Append(" FROM DUMMY ");
             }
@@ -449,7 +452,8 @@ namespace PadronWtd.Repository.DI
                 NOW()
             )";
 
-                _logger.Info(queryInsert);
+                string queryLimpia = Regex.Replace(queryInsert, @"\s+", " ").Trim();
+                _logger.Info(queryLimpia);
                 oRS.DoQuery(queryInsert);
                 _logger.Info($"WTD3 insertado OK - CUIT:{cuit}, {wddCode} , Desd:{fDesde}");
 
@@ -457,7 +461,7 @@ namespace PadronWtd.Repository.DI
             }
             catch (Exception ex)
             {
-                string error = $"Error al insertar en WTD3 [CUIT:{cuit} WTCode:{wddCode} Entry:{entry}]: {ex.Message}";
+                string error = $"{wddCode}/{entry}: {ex.Message}";
                 _logger.Error($"{error}\n{ex.StackTrace}");
                 return (false, error);
             }
