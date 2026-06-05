@@ -131,7 +131,8 @@ namespace PadronWtd.UI.Services
 
                 // Procesar inserciones con transacción DI API
                 bool transactionStarted = false;
-                List<string> existingCodes = new List<string>();
+                List<string> existingBadCodes = new List<string>();
+                List<string> existingOkCodes = new List<string>();
                 List<string> insertedCodes = new List<string>();
                 try
                 {
@@ -145,30 +146,39 @@ namespace PadronWtd.UI.Services
                         string cuit = record.U_Cuit;
 
                         // Verificar si ya existe en WTD3
-                        if (_impSaltaRepository.CheckWtd3Exists(taxEntry, codigoSap, cuit, desde))
+                        var (alreadyExists, previousOK) = _impSaltaRepository.CheckWtd3Exists(taxEntry, codigoSap, cuit, desde, hasta);
+                        if ( alreadyExists || previousOK)
                         {
-                            _logger.Warn($"WTD3 ya existe para CUIT:{cuit} WTCode:{codigoSap} - Omitiendo");
-                            existingCodes.Add(codigoSap);
+                            if (previousOK) 
+                            {
+                                _logger.Warn($"WTD3 ya existía para CUIT:{cuit} WTCode:{codigoSap} - Omitiendo");
+                                existingOkCodes.Add(codigoSap);
+                            } else {
+                                _logger.Warn($"WTD3 ya existía para CUIT:{cuit} WTCode:{codigoSap} - Omitiendo marca error");
+                                existingBadCodes.Add(codigoSap);
+                            }
                             continue;
+                        } else
+                        {
+                            _logger.Info($"InsertWtd3 taxEntry:{taxEntry}, codigoSap:{codigoSap}, cuit:{cuit}");
+
+                            var (success, error) = _impSaltaRepository.InsertWtd3Direct(
+                                _company,
+                                taxEntry,
+                                codigoSap,
+                                cuit,
+                                desde,
+                                hasta,
+                                "80",
+                                "A"
+                            );
+
+                            if (!success)
+                                throw new Exception($"{error}");
+
+                            insertedCodes.Add(codigoSap);
                         }
 
-                        _logger.Info($"InsertWtd3 taxEntry:{taxEntry}, codigoSap:{codigoSap}, cuit:{cuit}");
-
-                        var (success, error) = _impSaltaRepository.InsertWtd3Direct(
-                            _company,
-                            taxEntry,
-                            codigoSap,
-                            cuit,
-                            desde,
-                            hasta,
-                            "80",
-                            "A"
-                        );
-
-                        if (!success)
-                            throw new Exception($"{error}");
-
-                        insertedCodes.Add(codigoSap);
                     }
 
                     _company.EndTransaction(SAPbobsCOM.BoWfTransOpt.wf_Commit);
@@ -185,21 +195,33 @@ namespace PadronWtd.UI.Services
                     throw(ex);
                 }
 
-                if (existingCodes.Any())
+                string note = "";
+                if (existingOkCodes.Any() || existingBadCodes.Any())
                 {
-                    string note = $"Códigos ya estaban registrados: {string.Join(" ", existingCodes)}";
-                    if (insertedCodes.Any())
+                    note = $"Se encontraron ya registrados: ";
+                    if (existingOkCodes.Any())
                     {
-                        note += $" insertados[{ string.Join(" ", insertedCodes)}]";
+                        note += $"[OK { string.Join(" ", existingOkCodes)}]";
                     }
 
-                    await SafeUpdateRecord(record, "40", note, timestamp);
-                    _logger.Warn($"Registro CUIT {record.U_Cuit} parcial: insertados [{string.Join(" ", insertedCodes)}], existentes [{string.Join(" ", existingCodes)}]");
-                    return false;
+                    if (existingBadCodes.Any())
+                    {
+                        note += $"[CON DIFERENCIAS { string.Join(" ", existingBadCodes)}]";
+                        if (insertedCodes.Any())
+                        {
+                            note += $"insertados OK [ {string.Join(" ", insertedCodes)}]";
+                        }
+                        await SafeUpdateRecord(record, "40", note, timestamp);
+                        _logger.Warn($"Registro CUIT {record.U_Cuit} ${note}");
+                        return false;
+                    }
+
                 }
 
                 string processedCodes = string.Join(" ", insertedCodes);
-                await SafeUpdateRecord(record, "20", $"Procesado OK. Códigos: {processedCodes}", timestamp);
+                string message = $"Procesado OK. Insertados: [{processedCodes}] {note}";
+                await SafeUpdateRecord(record, "20", message, timestamp);
+                _logger.Info($"Procesado CUIT {record.U_Cuit}: {message}");
                 return true;
             }
             catch (Exception ex)
@@ -208,22 +230,6 @@ namespace PadronWtd.UI.Services
                 await SafeUpdateRecord(record, "40", $"{ex.Message}", timestamp);
                 return false;
             }
-        }
-
-        private void ExecuteInsertWtd3(int taxEntry, string codigoSap, string cuit, DateTime desde, DateTime hasta)
-        {
-            _logger.Info($"InsertWtd3Direct taxEntry:{taxEntry},item.CodigoSap:{codigoSap},record.U_Cuit:{cuit}");
-
-            _impSaltaRepository.InsertWtd3Direct(
-                _company, 
-                taxEntry, 
-                codigoSap, 
-                cuit, 
-                desde, 
-                hasta, 
-                "80", 
-                "A"
-            );
         }
 
         // --------------------------------------------------------------------------------------------

@@ -475,7 +475,18 @@ namespace PadronWtd.Repository.DI
             }
         }
 
-        public bool CheckWtd3Exists(int entry, string wddCode, string cuit, DateTime desde)
+        public (bool alreadyExists, bool previousOK) CheckWtd3Exists(int entry, string wddCode, string cuit, DateTime desde, DateTime hasta)
+        {
+            bool alreadyExists = CheckWtd3AlreadyExists(entry, wddCode, cuit, desde);
+            bool previousOK = false;
+            if (alreadyExists) 
+            {
+                previousOK = CheckWtd3ExistsPreviouslyOK(entry, wddCode, cuit, desde, hasta);
+            }
+            return (alreadyExists, previousOK);
+        }
+
+        private bool CheckWtd3AlreadyExists(int entry, string wddCode, string cuit, DateTime desde)
         {
             Recordset oRS = null;
             try
@@ -491,11 +502,11 @@ namespace PadronWtd.Repository.DI
                           AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')";
                 oRS.DoQuery(query);
                 int cant = int.Parse(oRS.Fields.Item("CANT").Value.ToString());
-                return cant > 0;
+                return cant > 0 ;
             }
             catch (Exception ex)
             {
-                _logger.Error($"Error en CheckWtd3Exists: {ex.Message}");
+                _logger.Error($"Error en CheckWtd3AlreadyExists: {ex.Message}");
                 return false;
             }
             finally
@@ -503,6 +514,40 @@ namespace PadronWtd.Repository.DI
                 if (oRS != null) Marshal.ReleaseComObject(oRS);
             }
         }
+
+
+
+        private bool CheckWtd3ExistsPreviouslyOK(int entry, string wddCode, string cuit, DateTime desde, DateTime hasta)
+        {
+            Recordset oRS = null;
+            try
+            {
+                oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                string fDesde = desde.ToString("yyyyMMdd");
+                string fHasta = hasta.ToString("yyyyMMdd");
+                string query = $@"
+                        SELECT COUNT(*) AS CANT 
+                        FROM ""WTD3""
+                        WHERE ""AbsEntry"" = {entry}
+                          AND ""WTCode""   = '{wddCode}'
+                          AND ""KeyPart1"" = '{cuit}'
+                          AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')
+                          AND ""DateTo"" = TO_DATE('{fHasta}', 'YYYYMMDD')";
+                oRS.DoQuery(query);
+                int cant = int.Parse(oRS.Fields.Item("CANT").Value.ToString());
+                return cant > 0 ;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error en CheckWtd3ExistsPreviouslyOK: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                if (oRS != null) Marshal.ReleaseComObject(oRS);
+            }
+        }
+
 
         public async Task<Dictionary<string, int>> GetStatsByAnioAsync(string qValue, string year)
         {

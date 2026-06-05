@@ -531,7 +531,7 @@ namespace PadronWtd.UI.Forms
             ProcessResult resultado = await service.ProcessRecordsAsync(qValue, year, progressReporter);
 
             string txtTotal = $"Exitosos: {resultado.TotalRegistros}";
-            string txtOk = $"Procesados: {(-1) * resultado.ProcesadosExitosos}";
+            string txtOk = $"Procesados: {Math.Abs(resultado.ProcesadosExitosos)}";
             string txtError = $"Errores: {resultado.RegistrosConError}";
 
             UpdateResultLabels(txtTotal, txtOk, txtError);
