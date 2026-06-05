@@ -81,12 +81,6 @@ namespace PadronWtd.UI.Services
                 string encryptedPass = ConfigurationManager.AppSettings["SAP.Password"];
                 oCompany.Password = EncryptionHelper.Decrypt(encryptedPass);
 
-                //oCompany.UserName = "GSCHNEIDER";
-                //oCompany.Password = "TzLt3#MA";
-
-                //oCompany.DbUserName = "USERINTDEV";
-                //oCompany.DbPassword = "Argentina2025!";
-
                 oCompany.UseTrusted = false;
                 oCompany.language = BoSuppLangs.ln_Spanish_La;
 
