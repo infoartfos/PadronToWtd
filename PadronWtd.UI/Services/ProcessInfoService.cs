@@ -129,36 +129,99 @@ namespace PadronWtd.UI.Services
                     return false;
                 }
 
-                // Procesar inserciones
-                foreach (var item in taxItems)
+                // Procesar inserciones con transacción DI API
+                bool transactionStarted = false;
+                List<string> existingBadCodes = new List<string>();
+                List<string> existingOkCodes = new List<string>();
+                List<string> insertedCodes = new List<string>();
+                try
                 {
-                    int taxEntry = int.TryParse(item.U_Codigo, out int parsed) ? parsed : 1;
+                    _company.StartTransaction();
+                    transactionStarted = true;
 
-                    string codigoSap = item.CodigoSap;
-                    string cuit = record.U_Cuit;
-                    _logger.Info($"InsertWtd3 taxEntry:{taxEntry}, codigoSap:{codigoSap}, cuit:{cuit}");
+                    foreach (var item in taxItems)
+                    {
+                        int taxEntry = int.TryParse(item.U_Codigo, out int parsed) ? parsed : 1;
+                        string codigoSap = item.CodigoSap;
+                        string cuit = record.U_Cuit;
 
-                    var (success, error) = _impSaltaRepository.InsertWtd3Direct(
-                        _company,
-                        taxEntry,
-                        codigoSap,
-                        cuit,
-                        desde,
-                        hasta,
-                        "80",
-                        "A"
-                    );
+                        // Verificar si ya existe en WTD3
+                        var (alreadyExists, previousOK) = _impSaltaRepository.CheckWtd3Exists(taxEntry, codigoSap, cuit, desde, hasta);
+                        if ( alreadyExists || previousOK)
+                        {
+                            if (previousOK) 
+                            {
+                                _logger.Warn($"WTD3 ya existía para CUIT:{cuit} WTCode:{codigoSap} - Omitiendo");
+                                existingOkCodes.Add(codigoSap);
+                            } else {
+                                _logger.Warn($"WTD3 ya existía para CUIT:{cuit} WTCode:{codigoSap} - Omitiendo marca error");
+                                existingBadCodes.Add(codigoSap);
+                            }
+                            continue;
+                        } else
+                        {
+                            _logger.Info($"InsertWtd3 taxEntry:{taxEntry}, codigoSap:{codigoSap}, cuit:{cuit}");
 
-                    if (!success)
-                        throw new Exception($"Error código {codigoSap}: {error}");
+                            var (success, error) = _impSaltaRepository.InsertWtd3Direct(
+                                _company,
+                                taxEntry,
+                                codigoSap,
+                                cuit,
+                                desde,
+                                hasta,
+                                "80",
+                                "A"
+                            );
 
+                            if (!success)
+                                throw new Exception($"{error}");
+
+                            insertedCodes.Add(codigoSap);
+                        }
+
+                    }
+
+                    _company.EndTransaction(SAPbobsCOM.BoWfTransOpt.wf_Commit);
+                    transactionStarted = false;
+                }
+                catch (Exception ex)
+                {
+                    if (transactionStarted && _company.InTransaction)
+                    {
+                        try { _company.EndTransaction(SAPbobsCOM.BoWfTransOpt.wf_RollBack); }
+                        catch (Exception rbEx) { _logger.Error($"Error en rollback: {rbEx.Message}"); }
+                        transactionStarted = false;
+                    }
+                    throw(ex);
+                }
+
+                string note = "";
+                if (existingOkCodes.Any() || existingBadCodes.Any())
+                {
+                    note = $"Se encontraron ya registrados: ";
+                    if (existingOkCodes.Any())
+                    {
+                        note += $"[OK { string.Join(" ", existingOkCodes)}]";
+                    }
+
+                    if (existingBadCodes.Any())
+                    {
+                        note += $"[CON DIFERENCIAS { string.Join(" ", existingBadCodes)}]";
+                        if (insertedCodes.Any())
+                        {
+                            note += $"insertados OK [ {string.Join(" ", insertedCodes)}]";
+                        }
+                        await SafeUpdateRecord(record, "40", note, timestamp);
+                        _logger.Warn($"Registro CUIT {record.U_Cuit} ${note}");
+                        return false;
+                    }
 
                 }
 
-                // Obtener códigos en una sola línea limpia para el log final
-                string processedCodes = string.Join(" ", taxItems.Select(x => x.CodigoSap));
-
-                await SafeUpdateRecord(record, "20", $"Procesado OK. Códigos: {processedCodes}", timestamp);
+                string processedCodes = string.Join(" ", insertedCodes);
+                string message = $"Procesado OK. Insertados: [{processedCodes}] {note}";
+                await SafeUpdateRecord(record, "20", message, timestamp);
+                _logger.Info($"Procesado CUIT {record.U_Cuit}: {message}");
                 return true;
             }
             catch (Exception ex)
@@ -168,23 +231,6 @@ namespace PadronWtd.UI.Services
                 return false;
             }
         }
-
-        private void ExecuteInsertWtd3(int taxEntry, string codigoSap, string cuit, DateTime desde, DateTime hasta)
-        {
-            _logger.Info($"InsertWtd3Direct taxEntry:{taxEntry},item.CodigoSap:{codigoSap},record.U_Cuit:{cuit}");
-
-            _impSaltaRepository.InsertWtd3Direct(
-                _company, 
-                taxEntry, 
-                codigoSap, 
-                cuit, 
-                desde, 
-                hasta, 
-                "80", 
-                "A"
-            );
-        }
-
 
         // --------------------------------------------------------------------------------------------
         // Helpers para evitar Crash en Updates
@@ -200,11 +246,16 @@ namespace PadronWtd.UI.Services
                 if (notas != null)
                 {
                     notas = notas.Replace("'", "");
+                    SAPbobsCOM.UserTables oUserTables = _company.UserTables;
+                    SAPbobsCOM.UserTable oTable = oUserTables.Item("PADRON_SALTA_IMP3");
 
-                    if (notas.Length > 50)
+                    int maxStringLength = oTable.UserFields.Fields.Item("U_Notas").Size;
+                    if (notas.Length > maxStringLength)
                     {
-                        notas = notas.Substring(0, 50);
+                        _logger.Warn($"El mensaje de notas superaba los {maxStringLength} caracteres. Se recortó dinámicamente.");
+                        notas = notas.Substring(0, maxStringLength);
                     }
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(oTable);
                 }
                 else
                 {
@@ -212,12 +263,11 @@ namespace PadronWtd.UI.Services
                 }
 
                 record.U_Notas = notas;
-
                 await _impSaltaRepository.UpdateAsync(record);
             }
             catch (Exception ex)
             {
-                _logger.Error($"Fallo CRÍTICO al actualizar estado en SAP para Code {record.Code}. Error original fue ignorado. Causa: {ex.Message}");
+                _logger.Error($"Fallo CRÍTICO al actualizar estado en SAP para Code {record.Code}. Causa: {ex.Message}");
             }
         }
 

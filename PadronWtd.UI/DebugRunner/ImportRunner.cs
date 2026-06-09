@@ -31,7 +31,7 @@ namespace PadronWtd.DebugRunner
         {
             var sl = new ServiceLayerClient("https://contreras-hanadb.sbo.contreras.com.ar:50000/b1s/v1");
 
-            await sl.LoginAsync("gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
+            await sl.LoginAsync("uuuuuuuuuu", "XXXXXXXXX", "SBP_SIOC_CHAR");
 
             var repo = new PSaltaRepository(sl);
 
@@ -52,30 +52,6 @@ namespace PadronWtd.DebugRunner
 
             PSaltaCsvMapper.WriteCsv("padron_exportado.csv", datos);
         }
-
-
-
-
-        //string archivo = @"C:\Users\cvalicenti\source\repos\PadronToWtd\etc\padron.csv";
-
-        //Console.WriteLine($"Login SL...");
-        //    await _slp.LoginAsync( "gschneider", "TzLt3#MA", "SBP_SIOC_CHAR");
-        //var items = await _slp.GetAsync("Items?$top=5");
-        //// Display en consola los primeros 5 items
-        //Console.WriteLine("Items obtenidos:");
-        //    Console.WriteLine(items);
-
-        //    //if (!resp)
-        //    //{
-        //    //    Console.WriteLine($"NO SE LOGUEO.");
-        //    //    Environment.Exit(100);
-        //    //}
-        //    Console.WriteLine($"Login OK.");
-
-        //    Console.WriteLine($"Importando archivo: {archivo}");
-        //    object value = await _service.ImportarAsync(archivo, msg => Console.WriteLine(msg));
-
-        //Console.WriteLine("Importación completa.");
 
 
 

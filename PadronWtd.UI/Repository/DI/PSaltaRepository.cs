@@ -7,12 +7,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace PadronWtd.Repository.DI
 {
     public class PSaltaRepository
     {
+        public const int MaxLenNotas = 253;
+        //
         private readonly ILogger _logger;
         private readonly Company _company;
         private const string TABLE_NAME = "PADRON_SALTA_IMP3";
@@ -76,6 +79,7 @@ namespace PadronWtd.Repository.DI
                             U_Cuit = GetValue(recordset, "U_Cuit"),
                             U_Inscripcion = GetValue(recordset, "U_Inscripcion"),
                             U_Riesgo = GetValue(recordset, "U_Riesgo"),
+
                             U_Notas = GetValue(recordset, "U_Notas"),
                             U_Procesado = GetValue(recordset, "U_Procesado"),
                             U_Estado = GetValue(recordset, "U_Estado")
@@ -106,7 +110,6 @@ namespace PadronWtd.Repository.DI
                     if (userTable.GetByKey(r.Code))
                     {
                         userTable.Name = r.Name;
-
                         // Actualizar campos UDF
                         userTable.UserFields.Fields.Item("U_Anio").Value = r.U_Anio ?? "";
                         userTable.UserFields.Fields.Item("U_Padron").Value = r.U_Padron ?? "";
@@ -134,7 +137,7 @@ namespace PadronWtd.Repository.DI
                 catch (Exception ex)
                 {
                     _logger.Error($"Error en UpdateAsync: {ex.Message} {ex.StackTrace}");
-                    throw;
+                    throw(ex);
                 }
                 finally
                 {
@@ -292,7 +295,7 @@ namespace PadronWtd.Repository.DI
                 sb.Append($"'{SafeSubstring(r.U_Inscripcion, 2)}', ");
                 sb.Append($"'{SafeSubstring(r.U_Riesgo, 2)}', ");
                 sb.Append("'10', "); // Estado: "10" para que quepa en Alfanumérico(2)
-                sb.Append($"'{SafeSubstring(r.U_Notas, 50)}' ");
+                sb.Append($"'{SafeSubstring(r.U_Notas, MaxLenNotas)}' ");
 
                 sb.Append(" FROM DUMMY ");
             }
@@ -403,12 +406,12 @@ namespace PadronWtd.Repository.DI
 
                 // Paso 1: verificar si ya existe ese CUIT en ese período
                 string queryCheck = $@"
-            SELECT COUNT(*) AS CANT 
-            FROM ""WTD3""
-            WHERE ""AbsEntry"" = {entry}
-              AND ""WTCode""   = '{wddCode}'
-              AND ""KeyPart1"" = '{cuit}'
-              AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')";
+                        SELECT COUNT(*) AS CANT 
+                        FROM ""WTD3""
+                        WHERE ""AbsEntry"" = {entry}
+                          AND ""WTCode""   = '{wddCode}'
+                          AND ""KeyPart1"" = '{cuit}'
+                          AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')";
 
                 oRS.DoQuery(queryCheck);
                 int existe = int.Parse(oRS.Fields.Item("CANT").Value.ToString());
@@ -420,53 +423,45 @@ namespace PadronWtd.Repository.DI
                     return (true, string.Empty);
                 }
 
-                // Paso 2: obtener próximo LineId
-                string queryMaxLine = $@"
-            SELECT IFNULL(MAX(""LineId""), -1) + 1 AS NEXT_LINE
-            FROM ""WTD3""
-            WHERE ""AbsEntry"" = {entry}";
-
-                oRS.DoQuery(queryMaxLine);
-                string nextLine = oRS.Fields.Item("NEXT_LINE").Value.ToString();
-
-                // Paso 3: Insert
+                // Paso 2 : INSERT con LineId como subquery (atómico)
                 string queryInsert = $@"
-            INSERT INTO ""WTD3"" 
-            (
-                ""AbsEntry"", 
-                ""LineId"",
-                ""WTCode"", 
-                ""KeyPart1"",
-                ""KeyPart2"",
-                ""DateFrom"", 
-                ""DateTo"",
-                ""DetailType"",
-                ""DataSource"",
-                ""UpdateDate""
-            )
-            VALUES 
-            (
-                {entry}, 
-                {nextLine},
-                '{wddCode}', 
-                '{cuit}',
-                '{part2}',
-                TO_DATE('{fDesde}', 'YYYYMMDD'), 
-                TO_DATE('{fHasta}', 'YYYYMMDD'),
-                '{detType}',
-                'M',
-                NOW()
-            )";
+                        INSERT INTO ""WTD3"" 
+                        (
+                            ""AbsEntry"", 
+                            ""LineId"",
+                            ""WTCode"", 
+                            ""KeyPart1"",
+                            ""KeyPart2"",
+                            ""DateFrom"", 
+                            ""DateTo"",
+                            ""DetailType"",
+                            ""DataSource"",
+                            ""UpdateDate""
+                        )
+                        VALUES 
+                        (
+                            {entry}, 
+                            (SELECT COALESCE(MAX(""LineId""), -1) + 1 FROM ""WTD3"" WHERE ""AbsEntry"" = {entry}),
+                            '{wddCode}', 
+                            '{cuit}',
+                            '{part2}',
+                            TO_DATE('{fDesde}', 'YYYYMMDD'), 
+                            TO_DATE('{fHasta}', 'YYYYMMDD'),
+                            '{detType}',
+                            'M',
+                            NOW()
+                        )";
 
-                _logger.Info(queryInsert);
+                string queryLimpia = Regex.Replace(queryInsert, @"\s+", " ").Trim();
+                _logger.Info(queryLimpia);
                 oRS.DoQuery(queryInsert);
-                _logger.Info($"WTD3 insertado OK - CUIT:{cuit}, LineId:{nextLine}");
+                _logger.Info($"WTD3 insertado OK - CUIT:{cuit}, {wddCode} , Desd:{fDesde}");
 
                 return (true, string.Empty);
             }
             catch (Exception ex)
             {
-                string error = $"Error al insertar en WTD3 [CUIT:{cuit} WTCode:{wddCode} Entry:{entry}]: {ex.Message}";
+                string error = $"{wddCode}/{entry}: {ex.Message}";
                 _logger.Error($"{error}\n{ex.StackTrace}");
                 return (false, error);
             }
@@ -479,6 +474,80 @@ namespace PadronWtd.Repository.DI
                 }
             }
         }
+
+        public (bool alreadyExists, bool previousOK) CheckWtd3Exists(int entry, string wddCode, string cuit, DateTime desde, DateTime hasta)
+        {
+            bool alreadyExists = CheckWtd3AlreadyExists(entry, wddCode, cuit, desde);
+            bool previousOK = false;
+            if (alreadyExists) 
+            {
+                previousOK = CheckWtd3ExistsPreviouslyOK(entry, wddCode, cuit, desde, hasta);
+            }
+            return (alreadyExists, previousOK);
+        }
+
+        private bool CheckWtd3AlreadyExists(int entry, string wddCode, string cuit, DateTime desde)
+        {
+            Recordset oRS = null;
+            try
+            {
+                oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                string fDesde = desde.ToString("yyyyMMdd");
+                string query = $@"
+                        SELECT COUNT(*) AS CANT 
+                        FROM ""WTD3""
+                        WHERE ""AbsEntry"" = {entry}
+                          AND ""WTCode""   = '{wddCode}'
+                          AND ""KeyPart1"" = '{cuit}'
+                          AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')";
+                oRS.DoQuery(query);
+                int cant = int.Parse(oRS.Fields.Item("CANT").Value.ToString());
+                return cant > 0 ;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error en CheckWtd3AlreadyExists: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                if (oRS != null) Marshal.ReleaseComObject(oRS);
+            }
+        }
+
+
+
+        private bool CheckWtd3ExistsPreviouslyOK(int entry, string wddCode, string cuit, DateTime desde, DateTime hasta)
+        {
+            Recordset oRS = null;
+            try
+            {
+                oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                string fDesde = desde.ToString("yyyyMMdd");
+                string fHasta = hasta.ToString("yyyyMMdd");
+                string query = $@"
+                        SELECT COUNT(*) AS CANT 
+                        FROM ""WTD3""
+                        WHERE ""AbsEntry"" = {entry}
+                          AND ""WTCode""   = '{wddCode}'
+                          AND ""KeyPart1"" = '{cuit}'
+                          AND ""DateFrom"" = TO_DATE('{fDesde}', 'YYYYMMDD')
+                          AND ""DateTo"" = TO_DATE('{fHasta}', 'YYYYMMDD')";
+                oRS.DoQuery(query);
+                int cant = int.Parse(oRS.Fields.Item("CANT").Value.ToString());
+                return cant > 0 ;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error en CheckWtd3ExistsPreviouslyOK: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                if (oRS != null) Marshal.ReleaseComObject(oRS);
+            }
+        }
+
 
         public async Task<Dictionary<string, int>> GetStatsByAnioAsync(string qValue, string year)
         {
