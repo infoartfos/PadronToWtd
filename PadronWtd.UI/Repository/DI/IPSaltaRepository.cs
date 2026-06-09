@@ -18,5 +18,6 @@ namespace PadronWtd.Repository.DI
         (bool success, string error) InsertWtd3Direct(int entry, string wddCode, string cuit, DateTime desde, DateTime hasta, string part2, string detType);
         (bool alreadyExists, bool previousOK) CheckWtd3Exists(int entry, string wddCode, string cuit, DateTime desde, DateTime hasta);
         Task<Dictionary<string, int>> GetStatsByAnioAsync(string qValue, string year);
+        bool CuitExistsInSap(string cuit);
     }
 }

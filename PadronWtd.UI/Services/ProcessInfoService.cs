@@ -10,8 +10,6 @@ using PadronWtd.Repository.DI;
 using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 using SAPbobsCOM;
-using SAPbouiCOM;
-using static System.Runtime.CompilerServices.RuntimeHelpers;
 
 
 namespace PadronWtd.UI.Services
@@ -23,9 +21,7 @@ namespace PadronWtd.UI.Services
         private readonly ISaltaConfigRepository _configRepository;
         private readonly IContDateRepository _contDateRepository;
         private readonly IPeriodosService _periodosService;
-        private readonly SAPbobsCOM.Company _company;
-        
-
+        private readonly Company _company;
         private Dictionary<string, List<ImpuestoCacheItem>> _impuestosCache;
 
         public ProcessInfoService(
@@ -33,15 +29,14 @@ namespace PadronWtd.UI.Services
             IPSaltaRepository impSaltaRepository,
             ISaltaConfigRepository configRepository,
             IContDateRepository contDateRepository,
-            IPeriodosService periodosService = null,
-            SAPbobsCOM.Company company = null)
+            IPeriodosService periodosService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _impSaltaRepository = impSaltaRepository ?? throw new ArgumentNullException(nameof(impSaltaRepository));
             _configRepository = configRepository ?? throw new ArgumentNullException(nameof(configRepository));
             _contDateRepository = contDateRepository ?? throw new ArgumentNullException(nameof(contDateRepository));
             _periodosService = periodosService;
-            _company = company;
+            _company = null;
         }
 
         public ProcessInfoService(bool forceServiceUser = true)
@@ -132,7 +127,7 @@ namespace PadronWtd.UI.Services
                 if (string.IsNullOrEmpty(record.U_Cuit))
                     throw new ArgumentException("El registro no tiene CUIT.");
 
-                if (!CuitExistsInSap(record.U_Cuit))
+                if (!_impSaltaRepository.CuitExistsInSap(record.U_Cuit))
                 {
                     _logger.Warn($"Proveedor con CUIT {record.U_Cuit} no existe. Omitiendo.");
                     await SafeUpdateRecord(record, "30", "Proveedor No Existe", timestamp);
@@ -147,15 +142,18 @@ namespace PadronWtd.UI.Services
                     return false;
                 }
 
-                // Procesar inserciones con transacción DI API
+                // Procesar inserciones con transacción DI API (si hay conexión)
                 bool transactionStarted = false;
                 List<string> existingBadCodes = new List<string>();
                 List<string> existingOkCodes = new List<string>();
                 List<string> insertedCodes = new List<string>();
                 try
                 {
-                    _company.StartTransaction();
-                    transactionStarted = true;
+                    if (_company != null)
+                    {
+                        _company.StartTransaction();
+                        transactionStarted = true;
+                    }
 
                     foreach (var item in taxItems)
                     {
@@ -198,18 +196,21 @@ namespace PadronWtd.UI.Services
 
                     }
 
-                    _company.EndTransaction(SAPbobsCOM.BoWfTransOpt.wf_Commit);
-                    transactionStarted = false;
+                    if (_company != null)
+                    {
+                        _company.EndTransaction(SAPbobsCOM.BoWfTransOpt.wf_Commit);
+                        transactionStarted = false;
+                    }
                 }
                 catch (Exception ex)
                 {
-                    if (transactionStarted && _company.InTransaction)
+                    if (transactionStarted && _company != null && _company.InTransaction)
                     {
                         try { _company.EndTransaction(SAPbobsCOM.BoWfTransOpt.wf_RollBack); }
                         catch (Exception rbEx) { _logger.Error($"Error en rollback: {rbEx.Message}"); }
                         transactionStarted = false;
                     }
-                    throw(ex);
+                    throw;
                 }
 
                 string note = "";
@@ -263,16 +264,19 @@ namespace PadronWtd.UI.Services
                 if (notas != null)
                 {
                     notas = notas.Replace("'", "");
-                    SAPbobsCOM.UserTables oUserTables = _company.UserTables;
-                    SAPbobsCOM.UserTable oTable = oUserTables.Item("PADRON_SALTA_IMP3");
-
-                    int maxStringLength = oTable.UserFields.Fields.Item("U_Notas").Size;
+                    int maxStringLength = PSaltaRepository.MaxLenNotas;
+                    if (_company != null)
+                    {
+                        SAPbobsCOM.UserTables oUserTables = _company.UserTables;
+                        SAPbobsCOM.UserTable oTable = oUserTables.Item("PADRON_SALTA_IMP3");
+                        maxStringLength = oTable.UserFields.Fields.Item("U_Notas").Size;
+                        System.Runtime.InteropServices.Marshal.ReleaseComObject(oTable);
+                    }
                     if (notas.Length > maxStringLength)
                     {
                         _logger.Warn($"El mensaje de notas superaba los {maxStringLength} caracteres. Se recortó dinámicamente.");
                         notas = notas.Substring(0, maxStringLength);
                     }
-                    System.Runtime.InteropServices.Marshal.ReleaseComObject(oTable);
                 }
                 else
                 {
@@ -346,30 +350,6 @@ namespace PadronWtd.UI.Services
             }
 
             throw new Exception($"No se encontraron fechas configuradas para {year} {qPeriodo}");
-        }
-
-        private bool CuitExistsInSap(string cuit)
-        {
-            Recordset rs = null;
-            try
-            {
-                rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
-
-                string query = $@"
-                    SELECT COUNT(*) 
-                    FROM ""OCRD"" 
-                    WHERE ""LicTradNum"" = '{cuit}'
-                    AND UPPER(""CardCode"") LIKE 'PL%'";
-
-                rs.DoQuery(query);
-
-                if (!rs.EoF)
-                    return int.Parse(rs.Fields.Item(0).Value.ToString()) > 0;
-
-                return false;
-            }
-            catch { return false; }
-            finally { if (rs != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(rs); }
         }
 
     }

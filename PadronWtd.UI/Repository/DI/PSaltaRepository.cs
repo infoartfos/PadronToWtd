@@ -476,6 +476,22 @@ namespace PadronWtd.Repository.DI
             }
         }
 
+        public bool CuitExistsInSap(string cuit)
+        {
+            Recordset rs = null;
+            try
+            {
+                rs = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                string query = $@"SELECT COUNT(*) FROM ""OCRD"" WHERE ""LicTradNum"" = '{cuit}' AND UPPER(""CardCode"") LIKE 'PL%'";
+                rs.DoQuery(query);
+                if (!rs.EoF)
+                    return int.Parse(rs.Fields.Item(0).Value.ToString()) > 0;
+                return false;
+            }
+            catch { return false; }
+            finally { if (rs != null) Marshal.ReleaseComObject(rs); }
+        }
+
         public (bool alreadyExists, bool previousOK) CheckWtd3Exists(int entry, string wddCode, string cuit, DateTime desde, DateTime hasta)
         {
             bool alreadyExists = CheckWtd3AlreadyExists(entry, wddCode, cuit, desde);

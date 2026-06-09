@@ -1,3 +1,4 @@
+#nullable disable
 using FluentAssertions;
 using PadronWtd.Domain;
 using PadronWtd.Repository.DI;
@@ -53,6 +54,9 @@ namespace PadronWtd.UI.Tests
         public Action<string, string> OnResetErrors { get; set; }
             = (q, y) => { };
 
+        public Func<string, bool> OnCuitExists { get; set; }
+            = cuit => true;
+
         // --- Implementación de la interfaz ---
 
         public Task<List<PSaltaRecord>> GetAllAsync() =>
@@ -91,6 +95,8 @@ namespace PadronWtd.UI.Tests
 
         public Task DeleteByAnioAndQAsync(string q, string y) =>
             Task.CompletedTask;
+
+        public bool CuitExistsInSap(string cuit) => OnCuitExists(cuit);
     }
 
     /// <summary>
@@ -140,7 +146,7 @@ namespace PadronWtd.UI.Tests
     /// Ejemplo de test unitario con dependencias mockeadas.
     /// Verifica entradas de log específicas sin necesidad de SAP.
     /// </summary>
-    public static class UnitExampleTest
+    public class UnitExampleTest
     {
         private static PSaltaRecord CreateTestRecord(string cuit = "30711111118")
         {
