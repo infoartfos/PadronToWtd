@@ -1,8 +1,8 @@
+using FluentAssertions;
 using PadronWtd.Domain;
 using PadronWtd.Repository.DI;
 using PadronWtd.UI.Logging;
 using PadronWtd.UI.Services;
-using SAPbouiCOM;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -168,10 +168,8 @@ namespace PadronWtd.UI.Tests
             };
         }
 
-        /// <summary>
-        /// Test 1: Registro procesado OK → log debe contener "WTD3 insertado OK"
-        /// </summary>
-        public static async Task Test_Wtd3InsertLogEntry()
+        [Fact]
+        public async Task Wtd3Insert_LogsOk()
         {
             var logger = new MockLogger();
             var periodosMock = new MockPeriodosService();
@@ -201,25 +199,16 @@ namespace PadronWtd.UI.Tests
                 impRepo,
                 configRepo,
                 contDateRepo,
-                periodosMock,
-                _company
+                periodosMock
             );
 
             await service.ProcessRecordsAsync("T01", "2025");
 
-            var found = logger.InfoMessages.Any(m => m.Contains("WTD3 insertado OK"));
-            Console.WriteLine($"[Test_Wtd3InsertLogEntry] {(found ? "PASS" : "FAIL")}");
-            if (!found)
-            {
-                Console.WriteLine("  INFO messages logged:");
-                foreach (var m in logger.InfoMessages) Console.WriteLine($"    {m}");
-            }
+            logger.InfoMessages.Should().Contain(m => m.Contains("WTD3 insertado OK"));
         }
 
-        /// <summary>
-        /// Test 2: Registro ya existente en WTD3 → log debe contener "WTD3 ya existía"
-        /// </summary>
-        public static async Task Test_Wtd3AlreadyExistsLogEntry()
+        [Fact]
+        public async Task Wtd3AlreadyExists_LogsWarning()
         {
             var logger = new MockLogger();
             var periodosMock = new MockPeriodosService();
@@ -244,19 +233,11 @@ namespace PadronWtd.UI.Tests
 
             await service.ProcessRecordsAsync("T01", "2025");
 
-            var found = logger.WarnMessages.Any(m => m.Contains("WTD3 ya existía"));
-            Console.WriteLine($"[Test_Wtd3AlreadyExistsLogEntry] {(found ? "PASS" : "FAIL")}");
-            if (!found)
-            {
-                Console.WriteLine("  WARN messages logged:");
-                foreach (var m in logger.WarnMessages) Console.WriteLine($"    {m}");
-            }
+            logger.WarnMessages.Should().Contain(m => m.Contains("WTD3 ya existía"));
         }
 
-        /// <summary>
-        /// Test 3: Proveedor no existe en OCRD → log debe contener "no existe"
-        /// </summary>
-        public static async Task Test_ProviderNotFoundLogEntry()
+        [Fact]
+        public async Task NoRecords_LogsWarning()
         {
             var logger = new MockLogger();
             var periodosMock = new MockPeriodosService();
@@ -287,29 +268,9 @@ namespace PadronWtd.UI.Tests
 
             await service.ProcessRecordsAsync("T01", "2025");
 
-            var found = logger.WarnMessages.Any(m => m.Contains("No se encontraron registros"));
-            Console.WriteLine($"[Test_ProviderNotFoundLogEntry] {(found ? "PASS" : "FAIL")}");
-            if (!found)
-            {
-                Console.WriteLine("  WARN messages logged:");
-                foreach (var m in logger.WarnMessages) Console.WriteLine($"    {m}");
-            }
+            logger.WarnMessages.Should().Contain(m => m.Contains("No se encontraron registros"));
         }
 
-        /// <summary>
-        /// Ejecuta todos los tests unitarios de ejemplo.
-        /// </summary>
-        public static async Task RunAll()
-        {
-            Console.WriteLine("=== UNIT TEST EXAMPLES ===");
-            Console.WriteLine();
 
-            await Test_Wtd3InsertLogEntry();
-            await Test_Wtd3AlreadyExistsLogEntry();
-            await Test_ProviderNotFoundLogEntry();
-
-            Console.WriteLine();
-            Console.WriteLine("=== FIN UNIT TESTS ===");
-        }
     }
 }

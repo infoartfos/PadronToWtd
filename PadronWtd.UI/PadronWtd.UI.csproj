@@ -159,8 +159,6 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
-    <Compile Include="Tests\UnitExampleTest.cs" />
-    <Compile Include="Tests\FunctionalExampleTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
