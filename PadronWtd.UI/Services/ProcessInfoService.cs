@@ -301,8 +301,16 @@ namespace PadronWtd.UI.Services
                     });
                 }
             }
-
             _logger.Info($"Caché de impuestos cargada: {_impuestosCache.Count} combinaciones.");
+            foreach (var rec in _impuestosCache)
+            {
+                var comb = rec.Value;
+                _logger.Info($"{rec.Key}------");
+                foreach (var r in comb)
+                {
+                    _logger.Info($"  {r.CodigoSap} {r.U_Codigo} ");
+                }
+            }
         }
 
         private List<ImpuestoCacheItem> GetWhtCodesFromCache(string inscripcion, string riesgo)
