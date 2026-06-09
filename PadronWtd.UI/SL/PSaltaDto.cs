@@ -11,5 +11,6 @@
         public string U_Riesgo { get; set; }
         public string U_Notas { get; set; }
         public string U_Procesado { get; set; }
+        public string U_Estado { get; set; }
     }
 }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using PadronWtd.Repository.DI;
 using PadronWtd.UI.Logging;
+using PadronWtd.UI.Services;
 
 namespace PadronWtd.UI.DI
 {
@@ -45,6 +46,10 @@ namespace PadronWtd.UI.DI
             Register<IPSaltaRepository>(() => new PSaltaRepository(company, logger));
             Register<ISaltaConfigRepository>(() => new SaltaConfigRepository(company, logger));
             Register<IContDateRepository>(() => new ContDateRepository(company, logger));
+            Register<IPeriodosService>(() => new PeriodosService(
+                Get<IContDateRepository>(),
+                Get<IPSaltaRepository>(),
+                logger));
         }
     }
 }

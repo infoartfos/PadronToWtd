@@ -22,6 +22,7 @@ namespace PadronWtd.UI.Services
         private readonly IPSaltaRepository _impSaltaRepository;
         private readonly ISaltaConfigRepository _configRepository;
         private readonly IContDateRepository _contDateRepository;
+        private readonly IPeriodosService _periodosService;
         private readonly SAPbobsCOM.Company _company;
         
 
@@ -32,12 +33,14 @@ namespace PadronWtd.UI.Services
             IPSaltaRepository impSaltaRepository,
             ISaltaConfigRepository configRepository,
             IContDateRepository contDateRepository,
+            IPeriodosService periodosService = null,
             SAPbobsCOM.Company company = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _impSaltaRepository = impSaltaRepository ?? throw new ArgumentNullException(nameof(impSaltaRepository));
             _configRepository = configRepository ?? throw new ArgumentNullException(nameof(configRepository));
             _contDateRepository = contDateRepository ?? throw new ArgumentNullException(nameof(contDateRepository));
+            _periodosService = periodosService;
             _company = company;
         }
 
@@ -49,6 +52,7 @@ namespace PadronWtd.UI.Services
             _impSaltaRepository = new PSaltaRepository(_company);
             _configRepository = new SaltaConfigRepository(_company);
             _contDateRepository = new ContDateRepository(_company);
+            _periodosService = null;
         }
 
         
@@ -333,8 +337,8 @@ namespace PadronWtd.UI.Services
 
         private async Task<(DateTime, DateTime)> GetDynamicDates(string qPeriodo, string year)
         {
-            var periodoService = new PeriodosService();
-            var fechas = await periodoService.GetDatesAsync(year, qPeriodo);
+            var service = _periodosService ?? new PeriodosService();
+            var fechas = await service.GetDatesAsync(year, qPeriodo);
 
             if (fechas.Desde.HasValue && fechas.Hasta.HasValue)
             {

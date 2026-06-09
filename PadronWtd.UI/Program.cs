@@ -28,9 +28,13 @@ namespace PadronWtd.UI
                     var _logger = SimpleServiceProvider.Get<ILogger>();
 
                     _logger.Info("=== DEBUG ARRANCANDO ====");
-                    // var runner = new ImportRunner();
-                    // var runner = new LeerPadronRunner();
-                    //runner.Run();
+
+                    // --- Test unitario (no requiere SAP) ---
+                    PadronWtd.UI.Tests.UnitTestExample.RunAll().Wait();
+
+                    // --- Test funcional (requiere SAP B1 + Service Layer) ---
+                    // PadronWtd.UI.Tests.FunctionalTestExample.Run().Wait();
+
                     _logger.Info("=== TERMINO  ====");
 
                     Environment.Exit(0);
