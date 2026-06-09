@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace PadronWtd.Repository.DI
 {
-    public class PSaltaRepository
+    public class PSaltaRepository : IPSaltaRepository
     {
         public const int MaxLenNotas = 253;
         //
@@ -21,13 +21,15 @@ namespace PadronWtd.Repository.DI
         private const string TABLE_NAME = "PADRON_SALTA_IMP3";
         private const string DB_TABLE_NAME = "@" + TABLE_NAME;
 
-        public PSaltaRepository(Company company)
+        public PSaltaRepository(Company company, ILogger logger)
         {
-            _logger = SimpleServiceProvider.Get<ILogger>();
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _company = company ?? throw new ArgumentNullException(nameof(company));
             if (!_company.Connected)
                 throw new InvalidOperationException("La conexión a SAP Business One no está activa.");
         }
+
+        public PSaltaRepository(Company company) : this(company, SimpleServiceProvider.Get<ILogger>()) { }
 
         // -----------------------------------------------------------------------
         // PROTECCIÓN: Truncar strings para evitar "Value too large for column"
@@ -388,7 +390,6 @@ namespace PadronWtd.Repository.DI
         }
 
         public (bool success, string error) InsertWtd3Direct(
-            Company company,
             int entry,
             string wddCode,
             string cuit,
@@ -400,7 +401,7 @@ namespace PadronWtd.Repository.DI
             Recordset oRS = null;
             try
             {
-                oRS = (Recordset)company.GetBusinessObject(BoObjectTypes.BoRecordset);
+                oRS = (Recordset)_company.GetBusinessObject(BoObjectTypes.BoRecordset);
                 string fDesde = desde.ToString("yyyyMMdd");
                 string fHasta = hasta.ToString("yyyyMMdd");
 

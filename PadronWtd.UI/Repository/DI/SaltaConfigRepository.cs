@@ -9,16 +9,18 @@ using System.Threading.Tasks;
 
 namespace PadronWtd.Repository.DI
 {
-    public class SaltaConfigRepository
+    public class SaltaConfigRepository : ISaltaConfigRepository
     {
         private readonly Company _company;
         private readonly ILogger _logger;
 
-        public SaltaConfigRepository(Company company)
+        public SaltaConfigRepository(Company company, ILogger logger)
         {
-            _company = company;
-            _logger = SimpleServiceProvider.Get<ILogger>();
+            _company = company ?? throw new ArgumentNullException(nameof(company));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
+
+        public SaltaConfigRepository(Company company) : this(company, SimpleServiceProvider.Get<ILogger>()) { }
 
         public async Task<List<ImpuestoRecord>> GetConfiguracionImpuestosAsync()
         {

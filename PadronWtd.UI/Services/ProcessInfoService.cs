@@ -19,13 +19,27 @@ namespace PadronWtd.UI.Services
     public class ProcessInfoService
     {
         private readonly ILogger _logger;
-        private readonly PSaltaRepository _impSaltaRepository;
-        private readonly SaltaConfigRepository _configRepository;
-        private readonly ContDateRepository _contDateRepository;
+        private readonly IPSaltaRepository _impSaltaRepository;
+        private readonly ISaltaConfigRepository _configRepository;
+        private readonly IContDateRepository _contDateRepository;
         private readonly SAPbobsCOM.Company _company;
         
 
         private Dictionary<string, List<ImpuestoCacheItem>> _impuestosCache;
+
+        public ProcessInfoService(
+            ILogger logger,
+            IPSaltaRepository impSaltaRepository,
+            ISaltaConfigRepository configRepository,
+            IContDateRepository contDateRepository,
+            SAPbobsCOM.Company company = null)
+        {
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _impSaltaRepository = impSaltaRepository ?? throw new ArgumentNullException(nameof(impSaltaRepository));
+            _configRepository = configRepository ?? throw new ArgumentNullException(nameof(configRepository));
+            _contDateRepository = contDateRepository ?? throw new ArgumentNullException(nameof(contDateRepository));
+            _company = company;
+        }
 
         public ProcessInfoService(bool forceServiceUser = true)
         {
@@ -163,7 +177,6 @@ namespace PadronWtd.UI.Services
                             _logger.Info($"InsertWtd3 taxEntry:{taxEntry}, codigoSap:{codigoSap}, cuit:{cuit}");
 
                             var (success, error) = _impSaltaRepository.InsertWtd3Direct(
-                                _company,
                                 taxEntry,
                                 codigoSap,
                                 cuit,

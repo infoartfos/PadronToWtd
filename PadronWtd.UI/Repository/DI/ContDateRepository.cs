@@ -9,16 +9,18 @@ using System.Threading.Tasks;
 
 namespace PadronWtd.Repository.DI
 {
-    public class ContDateRepository
+    public class ContDateRepository : IContDateRepository
     {
         private readonly Company _company;
         private readonly ILogger _logger;
 
-        public ContDateRepository(Company company)
+        public ContDateRepository(Company company, ILogger logger)
         {
             _company = company ?? throw new ArgumentNullException(nameof(company));
-            _logger = SimpleServiceProvider.Get<ILogger>();
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
+
+        public ContDateRepository(Company company) : this(company, SimpleServiceProvider.Get<ILogger>()) { }
 
         // -----------------------------------------------------------------------
         // Consulta de Impuestos

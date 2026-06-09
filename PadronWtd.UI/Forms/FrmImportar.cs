@@ -35,7 +35,7 @@ namespace PadronWtd.UI.Forms
         private readonly ILogger _logger;
         private readonly FileImportService _importFileService;
         private readonly PeriodosService _periodosService;
-        private readonly PSaltaRepository _repository;
+        private readonly IPSaltaRepository _repository;
         private readonly SAPbobsCOM.Company _company;
 
         // --- Estado y Colas ---

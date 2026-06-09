@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using PadronWtd.Repository.DI;
 using PadronWtd.UI.Logging;
-using PadronWtd.UI.Services;
 
 namespace PadronWtd.UI.DI
 {
@@ -33,12 +33,18 @@ namespace PadronWtd.UI.DI
             throw new InvalidOperationException($"Servicio no registrado: {typeof(TService).FullName}");
         }
 
-        // Helper preconfigurado
         public static void RegisterDefaults(string logFilePath)
         {
             Register<ILogger>(() => new FileLogger(logFilePath));
-            // Register<IImportService>(() => new FrmImportarService(Get<ILogger>()));
             Build();
+        }
+
+        public static void RegisterRepositories(SAPbobsCOM.Company company)
+        {
+            var logger = Get<ILogger>();
+            Register<IPSaltaRepository>(() => new PSaltaRepository(company, logger));
+            Register<ISaltaConfigRepository>(() => new SaltaConfigRepository(company, logger));
+            Register<IContDateRepository>(() => new ContDateRepository(company, logger));
         }
     }
 }
