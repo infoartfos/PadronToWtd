@@ -1,8 +1,8 @@
-﻿using PadronWtd.UI.DI;
+﻿using System;
+using System.Configuration;
+using PadronWtd.UI.DI;
 using PadronWtd.UI.Logging;
 using SAPbobsCOM;
-using System;
-using System.Configuration;
 
 namespace PadronWtd.UI.Services
 {
@@ -115,6 +115,14 @@ namespace PadronWtd.UI.Services
             {
                 if (oCompany != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(oCompany);
                 throw;
+            }
+            finally
+            {
+                if (oCompany != null && oCompany.Connected)
+                {
+                    oCompany.Disconnect();
+                }
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(oCompany);
             }
         }
 
