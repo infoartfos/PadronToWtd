@@ -58,7 +58,7 @@ namespace PadronWtd.UI.Tests
             Task.FromResult(new List<PSaltaRecord>());
 
         public Task<List<PSaltaRecord>> GetImportadosYErrorByPeriodoAnioAsync(string q, string y) =>
-            OnGetImportadosY(q, y);
+            OnGetImportadosYError(q, y);
 
         public Task<Dictionary<string, int>> GetStatsByAnioAsync(string q, string y) =>
             OnGetStats(q, y);

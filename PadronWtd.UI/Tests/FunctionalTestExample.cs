@@ -4,6 +4,7 @@ using PadronWtd.UI.Logging;
 using PadronWtd.UI.Services;
 using SAPbobsCOM;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -32,7 +33,7 @@ namespace PadronWtd.UI.Tests
         {
             try
             {
-                var slClient = new PadronWtd.UI.SL.ServiceLayerClient(slUrl);
+                var slClient = new ServiceLayerClient(slUrl);
                 await slClient.LoginAsync(user, pass, db);
 
                 // 1. Insertar registro de prueba en @PADRON_SALTA_IMP3
@@ -72,7 +73,7 @@ namespace PadronWtd.UI.Tests
         {
             try
             {
-                var slClient = new PadronWtd.UI.SL.ServiceLayerClient(slUrl);
+                var slClient = new ServiceLayerClient(slUrl);
                 await slClient.LoginAsync(user, pass, db);
 
                 // Eliminar registro de prueba
@@ -129,7 +130,7 @@ namespace PadronWtd.UI.Tests
                 Console.WriteLine("  [Act] Ejecutando procesamiento SAP...");
 
                 var logger = new FileLogger(logFilePath);
-                var company = SapConnectionManager.Instance.GetCompany(forceServiceUser: true);
+                var company = SapConnectionManager.Instance.GetCompany(true);
 
                 var impRepo = new PSaltaRepository(company, logger);
                 var configRepo = new SaltaConfigRepository(company, logger);
@@ -167,7 +168,8 @@ namespace PadronWtd.UI.Tests
 
                     Console.WriteLine();
                     Console.WriteLine("  Últimas líneas del log:");
-                    foreach (var line in logLines.TakeLast(10))
+                    var tail = logLines.Reverse().Take(10).Reverse().ToList();
+                    foreach (var line in tail)
                     {
                         Console.WriteLine($"    {line}");
                     }
