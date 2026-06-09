@@ -22,7 +22,7 @@ namespace PadronWtd.UI.Tests
     /// - Service Layer accesible (para el setup)
     /// - Credenciales configuradas en App.config o hardcodeadas para dev
     /// </summary>
-    public static class FunctionalTestExample
+    public static class FunctionalExampleTest
     {
         /// <summary>
         /// Prepara data de prueba usando Service Layer.

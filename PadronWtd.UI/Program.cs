@@ -30,7 +30,7 @@ namespace PadronWtd.UI
                     _logger.Info("=== DEBUG ARRANCANDO ====");
 
                     // --- Test unitario (no requiere SAP) ---
-                    PadronWtd.UI.Tests.UnitTestExample.RunAll().Wait();
+                    PadronWtd.UI.Tests.UnitExampleTest.RunAll().Wait();
 
                     // --- Test funcional (requiere SAP B1 + Service Layer) ---
                     // PadronWtd.UI.Tests.FunctionalTestExample.Run().Wait();

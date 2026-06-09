@@ -139,7 +139,7 @@ namespace PadronWtd.UI.Tests
     /// Ejemplo de test unitario con dependencias mockeadas.
     /// Verifica entradas de log específicas sin necesidad de SAP.
     /// </summary>
-    public static class UnitTestExample
+    public static class UnitExampleTest
     {
         private static PSaltaRecord CreateTestRecord(string cuit = "30711111118")
         {
